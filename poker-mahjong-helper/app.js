@@ -1096,9 +1096,6 @@ function executeSettlementCalculation(hostVal, initialBuyinMoney, hostScore, tot
     }
   }
 
-  // 結帳才以最後一將分東南西北玩家
-  const windDirections = { 1: '東風', 2: '南風', 3: '西風', 4: '北風' };
-
   // 整理 4 位玩家的結算數據
   let playerData = [];
   let totalCardsMoney = 0; // 四人最後牌面折算總金額
@@ -1111,7 +1108,6 @@ function executeSettlementCalculation(hostVal, initialBuyinMoney, hostScore, tot
     playerData.push({
       id: i,
       name: player.name,
-      wind: windDirections[i],
       cardsPoints: score.points,
       cardsMoney: score.money,
       initialMoney: initialBuyinMoney,
@@ -1158,7 +1154,7 @@ function executeSettlementCalculation(hostVal, initialBuyinMoney, hostScore, tot
       const balanceValStr = Math.abs(p.finalBalance);
 
       row.innerHTML = `
-        <td><strong>${p.name}</strong> <span style="font-size: 0.85em; opacity: 0.8;">(${p.wind})</span>${hostSuffix}</td>
+        <td><strong>${p.name}</strong>${hostSuffix}</td>
         <td>${p.cardsPoints} 點</td>
         <td>$${p.initialMoney}</td>
         <td class="${balanceClass}">${balanceSign}${balanceValStr}</td>
@@ -1185,7 +1181,7 @@ function executeSettlementCalculation(hostVal, initialBuyinMoney, hostScore, tot
   // 3. 💸 執行轉帳最簡化分帳演算法 (Min-cash-flow algorithm)
   let participants = [];
   playerData.forEach(p => {
-    participants.push({ name: `${p.name} (${p.wind})`, amount: p.netValue });
+    participants.push({ name: p.name, amount: p.netValue });
   });
 
   if (externalHostFund > 0) {
@@ -1252,8 +1248,7 @@ function executeSettlementCalculation(hostVal, initialBuyinMoney, hostScore, tot
     let hostNameText = '';
     if (hostVal.startsWith('p')) {
       const hostP = state.calc.players[parseInt(hostVal.substring(1))];
-      const hostWind = windDirections[parseInt(hostVal.substring(1))];
-      hostNameText = `<strong>${hostP.name} (${hostWind})</strong>`;
+      hostNameText = `<strong>${hostP.name}</strong>`;
     } else {
       hostNameText = `<strong>店東 (紅茶)</strong>`;
     }
@@ -1320,14 +1315,14 @@ function executeSettlementCalculation(hostVal, initialBuyinMoney, hostScore, tot
   
   let mvpText = '';
   if (mvp.finalBalance > 0) {
-    mvpText = `👑 【本日雀神 (MVP)】：✨ ${mvp.name} (${mvp.wind}) ✨ (大贏 +$${mvp.finalBalance} 元！)\n💬 雀神說：${randomMvp}\n`;
+    mvpText = `👑 【本日雀神 (MVP)】：✨ ${mvp.name} ✨ (大贏 +$${mvp.finalBalance} 元！)\n💬 雀神說：${randomMvp}\n`;
   } else {
     mvpText = `🤝 大夥溫和娛樂，今天無人大贏！\n`;
   }
 
   let loserText = '';
   if (loser.finalBalance < 0) {
-    loserText = `💸 【慈善撲克王】：🤡 ${loser.name} (${loser.wind}) 🤡 (今日功德無量 -$${Math.abs(loser.finalBalance)} 元)\n💬 悄悄話：${randomLoser}\n`;
+    loserText = `💸 【慈善撲克王】：🤡 ${loser.name} 🤡 (今日功德無量 -$${Math.abs(loser.finalBalance)} 元)\n💬 悄悄話：${randomLoser}\n`;
   }
 
   let lineSettlement = `🀄️ **【雀神閣 ‧ 牌局大結算戰報】** 🀄️\n\n📊 **玩家收支最終明細**：\n`;
@@ -1335,7 +1330,7 @@ function executeSettlementCalculation(hostVal, initialBuyinMoney, hostScore, tot
   playerData.forEach(p => {
     const sign = p.finalBalance > 0 ? '+' : (p.finalBalance < 0 ? '-' : ' ');
     const amt = Math.abs(p.finalBalance);
-    lineSettlement += `* 👤 ${p.name} (${p.wind})：手牌 ${p.cardsPoints}點 ➔ 最終淨盈虧 ${sign}$${amt}\n`;
+    lineSettlement += `* 👤 ${p.name}：手牌 ${p.cardsPoints}點 ➔ 最終淨盈虧 ${sign}$${amt}\n`;
   });
 
   lineSettlement += `\n🍵 **店東房租明細**：\n* 實收房租：${hostScore.points}點 ➔ 換算台幣金額：$${totalRentFund} 元\n`;
