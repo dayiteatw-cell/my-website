@@ -463,7 +463,7 @@ input:focus, select:focus {
   box-shadow: 0 0 10px var(--accent-mint-glow);
 }
 
-.player-name-select option {
+.player-name-select option, .player-slot-select option {
   background-color: var(--bg-felt);
   color: var(--text-primary);
   font-weight: normal;

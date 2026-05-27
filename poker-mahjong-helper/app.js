@@ -304,8 +304,8 @@ function setPlayerSelectValue(selectEl, nameVal) {
 
 // 綁定輸入控制事件
 function bindInputs() {
-  // 約戰表單事件監聽 (排除已刪除的 DOM，防止 null crash)
-  const matchInputs = ['match-month', 'match-day', 'match-time', 'slot-1', 'slot-2', 'slot-3', 'slot-4'];
+  // 約戰表單時間事件監聽 (排除已刪除的 DOM，防止 null crash)
+  const matchInputs = ['match-month', 'match-day', 'match-time'];
   matchInputs.forEach(id => {
     const el = document.getElementById(id);
     if (el) {
@@ -316,6 +316,49 @@ function bindInputs() {
       });
     }
   });
+
+  // 約戰名單下拉選單同步 (支援自訂輸入)
+  for (let i = 1; i <= 4; i++) {
+    const el = document.getElementById(`slot-${i}`);
+    if (el) {
+      el.addEventListener('change', (e) => {
+        const defaults = ['', '玩家 1', '玩家 2', '玩家 3', '玩家 4'];
+        let nameVal = e.target.value || defaults[i];
+        
+        if (nameVal === '其他') {
+          const customName = prompt('請輸入自訂約戰玩家的姓名：');
+          if (customName && customName.trim()) {
+            const cleanName = customName.trim();
+            // 檢查是否已在選項中
+            let exists = false;
+            for (let j = 0; j < el.options.length; j++) {
+              if (el.options[j].value === cleanName) {
+                exists = true;
+                break;
+              }
+            }
+            if (!exists) {
+              const opt = document.createElement('option');
+              opt.value = cleanName;
+              opt.textContent = cleanName;
+              el.insertBefore(opt, el.options[el.options.length - 1]);
+            }
+            el.value = cleanName;
+            nameVal = cleanName;
+          } else {
+            // 取消則還原回原本設定的名稱
+            el.value = state.match.slots[i-1] || defaults[i];
+            return;
+          }
+        }
+        
+        state.match.slots[i-1] = nameVal;
+        readMatchForm();
+        updateLineTemplate();
+        saveToLocalStorage();
+      });
+    }
+  }
 
   // 記分區玩家姓名選擇同步 (支援自訂輸入)
   for (let i = 1; i <= 4; i++) {
@@ -1395,7 +1438,9 @@ function loadFromLocalStorage() {
       
       for (let i = 1; i <= 4; i++) {
         const slotEl = document.getElementById(`slot-${i}`);
-        if (slotEl) slotEl.value = state.match.slots[i-1] || '';
+        if (slotEl) {
+          setPlayerSelectValue(slotEl, state.match.slots[i-1]);
+        }
       }
     }
     
