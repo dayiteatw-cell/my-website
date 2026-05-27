@@ -442,20 +442,31 @@ input:focus, select:focus {
   padding-bottom: 12px;
 }
 
-.player-name-input {
-  font-size: 1.25rem;
+.player-name-select {
+  font-size: 1.15rem;
   font-weight: 700;
-  border: none;
-  background: transparent;
-  padding: 4px 8px;
+  border: 1px solid var(--border-felt);
+  background: rgba(0, 0, 0, 0.25);
+  padding: 6px 12px;
   color: var(--text-primary);
   width: 180px;
-  border-radius: 4px;
+  border-radius: var(--radius-md);
+  outline: none;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
-.player-name-input:focus {
-  background-color: rgba(255, 255, 255, 0.08);
-  box-shadow: none;
+.player-name-select:focus {
+  background-color: rgba(0, 0, 0, 0.4);
+  border-color: var(--accent-mint);
+  box-shadow: 0 0 10px var(--accent-mint-glow);
+}
+
+.player-name-select option {
+  background-color: var(--bg-felt);
+  color: var(--text-primary);
+  font-weight: normal;
 }
 
 .player-host-badge {

@@ -35,7 +35,7 @@ let state = {
     slots: ['', '', '', ''] // 預設 4 位鐵咖
   },
   calc: {
-    hostPlayer: 'none', // 'p1', 'p2', 'p3', 'p4', 'external', 'none'
+    hostPlayer: 'external', // 'p1', 'p2', 'p3', 'p4', 'external', 'none'
     initialBuyin: 100, // 初始買入點數 (預設100點 = $2000)
     players: {
       1: { name: '玩家 1', cards: [] },
@@ -233,7 +233,7 @@ function importPlayersToCalculator() {
     const slotName = state.match.slots[i-1] || defaultNames[i-1];
     state.calc.players[i].name = slotName;
     const inputEl = document.getElementById(`p${i}-name`);
-    if (inputEl) inputEl.value = slotName;
+    if (inputEl) setPlayerSelectValue(inputEl, slotName);
   }
 
   // 嘗試比對店東是誰
@@ -282,6 +282,26 @@ function updateHostDropdownOptions() {
   }
 }
 
+// 動態更新玩家下拉選單選項，以支援載入或導入自訂姓名
+function setPlayerSelectValue(selectEl, nameVal) {
+  if (!selectEl) return;
+  let exists = false;
+  for (let j = 0; j < selectEl.options.length; j++) {
+    if (selectEl.options[j].value === nameVal) {
+      exists = true;
+      break;
+    }
+  }
+  if (!exists && nameVal) {
+    const opt = document.createElement('option');
+    opt.value = nameVal;
+    opt.textContent = nameVal;
+    // 插入到倒數第一個「其他玩家...」之前
+    selectEl.insertBefore(opt, selectEl.options[selectEl.options.length - 1]);
+  }
+  selectEl.value = nameVal;
+}
+
 // 綁定輸入控制事件
 function bindInputs() {
   // 約戰表單事件監聽 (排除已刪除的 DOM，防止 null crash)
@@ -297,13 +317,42 @@ function bindInputs() {
     }
   });
 
-  // 記分區玩家姓名輸入同步
+  // 記分區玩家姓名選擇同步 (支援自訂輸入)
   for (let i = 1; i <= 4; i++) {
     const el = document.getElementById(`p${i}-name`);
     if (el) {
-      el.addEventListener('input', (e) => {
+      el.addEventListener('change', (e) => {
         const defaults = ['', '玩家 1', '玩家 2', '玩家 3', '玩家 4'];
-        state.calc.players[i].name = e.target.value || defaults[i];
+        let nameVal = e.target.value || defaults[i];
+        
+        if (nameVal === '其他') {
+          const customName = prompt('請輸入自訂玩家的姓名：');
+          if (customName && customName.trim()) {
+            const cleanName = customName.trim();
+            // 檢查是否已在選項中
+            let exists = false;
+            for (let j = 0; j < el.options.length; j++) {
+              if (el.options[j].value === cleanName) {
+                exists = true;
+                break;
+              }
+            }
+            if (!exists) {
+              const opt = document.createElement('option');
+              opt.value = cleanName;
+              opt.textContent = cleanName;
+              el.insertBefore(opt, el.options[el.options.length - 1]);
+            }
+            el.value = cleanName;
+            nameVal = cleanName;
+          } else {
+            // 取消則還原回原本設定的名稱
+            el.value = state.calc.players[i].name || defaults[i];
+            return;
+          }
+        }
+        
+        state.calc.players[i].name = nameVal;
         updateHostDropdownOptions();
         saveToLocalStorage();
       });
@@ -1351,7 +1400,10 @@ function loadFromLocalStorage() {
     }
     
     if (parsed.calc) {
-      state.calc.hostPlayer = parsed.calc.hostPlayer || 'none';
+      state.calc.hostPlayer = parsed.calc.hostPlayer;
+      if (!state.calc.hostPlayer || state.calc.hostPlayer === 'none') {
+        state.calc.hostPlayer = 'external';
+      }
       state.calc.initialBuyin = parsed.calc.initialBuyin || 100;
       
       if (parsed.calc.players) {
@@ -1372,7 +1424,9 @@ function loadFromLocalStorage() {
       
       for (let i = 1; i <= 4; i++) {
         const nameEl = document.getElementById(`p${i}-name`);
-        if (nameEl) nameEl.value = state.calc.players[i].name;
+        if (nameEl) {
+          setPlayerSelectValue(nameEl, state.calc.players[i].name);
+        }
       }
     }
   } catch (e) {
