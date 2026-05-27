@@ -23,6 +23,19 @@ const POKER_RULES = {
   13: { label: 'K',  points: 15 }
 };
 
+const TRASH_TALKS = [
+  "🔥 溫馨提示：今晚誰再遲到，房租直接由他全額買單！",
+  "🃏 牌局箴言：打牌不摸牌，早晚是個才；今晚誰要當放槍大師？",
+  "🍵 聽說紅茶店的紅茶很甜，不知道今晚是誰請客？",
+  "💸 贏錢不要走，輸錢不要哭，打完我們還是好兄弟！",
+  "🀄 說好是健康休閒局，大家下手不要太狠啊！",
+  "🔥 預告：今晚有一位神祕嘉賓準備把大家的點數吸乾！",
+  "🚀 牌桌無父子，手下不留情！今晚吃大餐還是吃泡麵就看這局了！",
+  "🌟 今晚的目標：贏的低調，輸的優雅，放槍的請喝飲料！",
+  "💡 據說打牌前先洗手，自摸機率翻倍，信不信由你！",
+  "🔥 友情提醒：今晚請自備救心丸，心臟不好的請先退群！"
+];
+
 // 全域狀態管理
 const todayDateObj = new Date();
 let state = {
@@ -59,6 +72,11 @@ function init() {
   // 載入暫存資料
   loadFromLocalStorage();
   
+  // 隨機生成一個趣味打牌話術
+  if (!state.match.trashTalk) {
+    state.match.trashTalk = TRASH_TALKS[Math.floor(Math.random() * TRASH_TALKS.length)];
+  }
+
   // 初始化 API Key 顯示與事件
   initApiKeyToggle();
   
@@ -183,6 +201,8 @@ function updateLineTemplate() {
     playerList += `${i}. 👤 ${name}\n`;
   }
 
+  const trashTalk = state.match.trashTalk || TRASH_TALKS[0];
+
   const template = `🎴 **【雀神召集令 ‧ 日日夜戰】** 🎴
 
 📅 時間：${dateStr}${dayOfWeekStr} ${timeStr}
@@ -195,7 +215,10 @@ ${playerList}
 💡 點數規則：
 1-10 點數代表金額的 20 倍 ($20 - $200)
 J、Q、K 牌代表 15 點 ($300)
-大家準時入座，不見不散！`;
+大家準時入座，不見不散！
+
+💬 今日大師開示：
+${trashTalk}`;
 
   const previewEl = document.getElementById('line-template-text');
   if (previewEl) previewEl.textContent = template;
