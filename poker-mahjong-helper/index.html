@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🀄️ 雀神閣 ‧ 撲克籌碼約戰與結算系統</title>
+  <!-- Google Fonts: Inter & Noto Sans TC for premium typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="index.css?v=3.2">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="logo-area">
+        <span class="mahjong-icon">🀄️</span>
+        <h1>雀神閣</h1>
+      </div>
+      <p class="subtitle">撲克籌碼約戰與智能結算系統</p>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="app-nav">
+      <button class="nav-tab active" id="tab-btn-match" onclick="switchTab('match')">📅 約戰報名</button>
+      <button class="nav-tab" id="tab-btn-calc" onclick="switchTab('calc')">🃏 記分結算</button>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="app-main">
+      
+      <!-- Tab 1: 約戰報名 (Match Organizer) -->
+      <section id="tab-match" class="tab-content active-content">
+        <div class="grid-container">
+          <!-- Organizer Form -->
+          <div class="card glass-panel">
+            <h2 class="card-title">📅 發起雀神令</h2>
+            <div class="form-group">
+              <label>選擇日期 (月/日)</label>
+              <div class="date-select-row" style="display: flex; gap: 10px;">
+                <select id="match-month" style="flex: 1;"></select>
+                <select id="match-day" style="flex: 1;"></select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="match-time">選擇時間</label>
+              <select id="match-time" style="width: 100%;"></select>
+            </div>
+
+            <div class="player-slots-group">
+              <label>預計參戰鐵咖 (上限 4 人)</label>
+              <div class="slot-inputs">
+                <input type="text" class="player-slot" id="slot-1" placeholder="玩家 1 (預設主揪)">
+                <input type="text" class="player-slot" id="slot-2" placeholder="玩家 2">
+                <input type="text" class="player-slot" id="slot-3" placeholder="玩家 3">
+                <input type="text" class="player-slot" id="slot-4" placeholder="玩家 4">
+              </div>
+            </div>
+            <div class="button-row">
+              <button class="btn btn-primary" onclick="generateLineTemplate()">✨ 生成約戰範本</button>
+              <button class="btn btn-secondary" onclick="importPlayersToCalculator()">🀄️ 帶入玩家至計分區</button>
+            </div>
+          </div>
+
+          <!-- LINE Preview Box -->
+          <div class="card glass-panel preview-card">
+            <div class="card-header-row">
+              <h2 class="card-title">📱 LINE 傳送預覽</h2>
+              <span class="badge badge-success">已即時同步</span>
+            </div>
+            <div class="line-preview-box">
+              <pre id="line-template-text">填寫左側表單，即可在此生成精美的 LINE 約戰訊息！</pre>
+            </div>
+            <button class="btn btn-success btn-block" onclick="copyLineTemplate()">📋 一鍵複製訊息</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 2: 記分結算 (Score Calculator) -->
+      <section id="tab-calc" class="tab-content">
+        <!-- Global Settings Panel -->
+        <div class="card glass-panel settings-panel">
+          <h2 class="card-title">⚙️ 牌局全域設定</h2>
+          <div class="settings-grid">
+            <div class="form-group">
+              <label for="calc-host-select">店東</label>
+              <select id="calc-host-select" onchange="updateHostSelection()">
+                <option value="none">-- 請選擇店東 --</option>
+                <option value="p1">玩家 1</option>
+                <option value="p2">玩家 2</option>
+                <option value="p3">玩家 3</option>
+                <option value="p4">玩家 4</option>
+                <option value="external">店東 (紅茶)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="calc-initial-buyin">每人初始買入點數 (1點 = $20)</label>
+              <input type="number" id="calc-initial-buyin" value="100" min="0" oninput="updateAllCalculations()">
+            </div>
+          </div>
+
+          <!-- Toggle Advanced Settings Button -->
+          <div style="display: flex; justify-content: center; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
+            <button type="button" class="btn btn-secondary btn-block" style="font-size: 0.82rem; padding: 8px 16px; border-style: dashed; justify-content: center; background: rgba(255,255,255,0.03);" onclick="toggleAdvancedSettings()">
+              🛠️ 展開/收合 API 與手機連線設定 (進階)
+            </button>
+          </div>
+
+          <!-- Advanced Settings Block (Collapsible) -->
+          <div id="advanced-settings-block" style="display: none; margin-top: 15px; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 10px;">
+            <!-- Gemini API Config Section -->
+            <div class="api-config-container" style="border-top: none; margin-top: 0; padding-top: 0;">
+              <label for="gemini-api-key">🔑 Gemini Vision AI 智慧相機金鑰設定</label>
+              <div class="api-input-row">
+                <div class="password-toggle-wrapper">
+                  <input type="password" id="gemini-api-key" placeholder="貼上您的 Gemini API Key (格式如 AIzaSy...)" oninput="saveApiKey()">
+                  <button type="button" id="api-key-toggle-btn" class="password-toggle-btn" onclick="toggleApiKeyVisibility()">👁️ 顯示</button>
+                </div>
+                <a href="https://aistudio.google.com/app/apikey" target="_blank" class="btn btn-secondary api-btn-link">🆓 免費申請 API Key</a>
+              </div>
+              <p id="api-key-status-text" class="api-help-tip" style="color: #64dfdf; font-weight: 600; display: none; text-shadow: 0 0 8px rgba(100, 223, 223, 0.3);">
+                ✅ 金鑰已自動儲存並開通成功！您可以直接在下方拍照算點數了。
+              </p>
+              <p class="api-help-tip">
+                💡 為了隱私，您的金鑰僅會保存在此裝置的裝置快取 (LocalStorage), 絕不會上傳給任何第三方。
+              </p>
+            </div>
+            
+            <!-- 手機連線掃碼區 -->
+            <div class="mobile-connect-section" style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed rgba(255,255,255,0.1);">
+              <label>📱 手機連線測試與掃碼一鍵開通</label>
+              <div style="display: flex; gap: 15px; align-items: center; margin-top: 8px; background: rgba(0,0,0,0.2); padding: 12px; border-radius: var(--radius-md);">
+                <div id="qrcode-container" style="background: white; padding: 6px; border-radius: 6px; display: inline-block;">
+                  <img id="mobile-qr-image" src="" alt="QR Code" style="width: 100px; height: 100px; display: block;">
+                </div>
+                <div style="flex: 1;">
+                  <p style="margin: 0; font-size: 0.82rem; color: var(--text-secondary); line-height: 1.4;">
+                    手機與電腦連接同一個 Wi-Fi 網路後，<b>直接掃描左側 QR Code</b> 即可在手機上開啟系統，並自動同步您設定的 API Key 金鑰，不需在手機上重新複製貼上！
+                  </p>
+                  <div style="margin-top: 8px; font-size: 0.82rem;">
+                    連線網址：<a id="mobile-connect-link" href="#" target="_blank" style="color: var(--accent-gold); word-break: break-all; text-decoration: underline;"></a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 📊 牌組即時對帳計數器 -->
+          <div class="live-counter-section">
+            <label class="live-counter-label">📊 牌組實時對帳統計（標準應為 52 張 / 400 點）</label>
+            <div class="live-counter-grid">
+              <div class="live-counter-card">
+                <span class="live-counter-icon">🃏</span>
+                <div class="live-counter-info">
+                  <span class="live-counter-title">目前已錄入張數</span>
+                  <span class="live-counter-value"><span id="live-total-cards">0</span> <small>/ 52 張</small></span>
+                </div>
+              </div>
+              <div class="live-counter-card">
+                <span class="live-counter-icon">🪙</span>
+                <div class="live-counter-info">
+                  <span class="live-counter-title">目前已錄入點數</span>
+                  <span class="live-counter-value"><span id="live-total-points">0</span> <small>/ 400 點</small></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        <!-- Four Players Score Grid -->
+        <div class="players-grid">
+          <!-- Player 1 -->
+          <div class="card glass-panel player-card" id="player-card-1">
+            <div class="player-header">
+              <input type="text" class="player-name-input" id="p1-name" value="玩家 1">
+              <span class="player-host-badge" id="p1-host-badge">店東 🍵</span>
+            </div>
+
+            <div class="card-inventory-section">
+              <div class="inventory-header">
+                <span class="label-text">手牌明細</span>
+                <button class="btn-clear-cards" onclick="clearPlayerCards(1)">重置手牌</button>
+              </div>
+              <div class="scan-container" id="p1-scan-container">
+                <div class="inventory-display" id="p1-inventory-display">
+                  <span class="empty-tip">📸 尚無手牌，請拍照或上傳撲克牌辨識</span>
+                </div>
+                <div class="scan-laser-line" id="p1-scan-laser"></div>
+                <div class="scan-overlay-text" id="p1-scan-text">🤖 AI 正在辨識手牌點數...</div>
+              </div>
+              <div class="camera-scan-action">
+                <input type="file" id="p1-photo-input" accept="image/*" capture="camera" style="display: none;" onchange="handlePhotoUpload(1, this.files[0])">
+                <button class="btn btn-success btn-block btn-camera-trigger" id="p1-scan-btn" onclick="triggerPhotoCapture(1)">
+                  📸 拍照 / 上傳辨識手牌
+                </button>
+              </div>
+            </div>
+
+            <div class="player-live-summary">
+              <div>總點數: <span class="highlight-text" id="p1-total-points">0</span> 點</div>
+              <div>折合台幣: <span class="highlight-text money-text" id="p1-total-money">$0</span> 元</div>
+            </div>
+          </div>
+
+          <!-- Player 2 -->
+          <div class="card glass-panel player-card" id="player-card-2">
+            <div class="player-header">
+              <input type="text" class="player-name-input" id="p2-name" value="玩家 2">
+              <span class="player-host-badge" id="p2-host-badge">店東 🍵</span>
+            </div>
+
+            <div class="card-inventory-section">
+              <div class="inventory-header">
+                <span class="label-text">手牌明細</span>
+                <button class="btn-clear-cards" onclick="clearPlayerCards(2)">重置手牌</button>
+              </div>
+              <div class="scan-container" id="p2-scan-container">
+                <div class="inventory-display" id="p2-inventory-display">
+                  <span class="empty-tip">📸 尚無手牌，請拍照或上傳撲克牌辨識</span>
+                </div>
+                <div class="scan-laser-line" id="p2-scan-laser"></div>
+                <div class="scan-overlay-text" id="p2-scan-text">🤖 AI 正在辨識手牌點數...</div>
+              </div>
+              <div class="camera-scan-action">
+                <input type="file" id="p2-photo-input" accept="image/*" capture="camera" style="display: none;" onchange="handlePhotoUpload(2, this.files[0])">
+                <button class="btn btn-success btn-block btn-camera-trigger" id="p2-scan-btn" onclick="triggerPhotoCapture(2)">
+                  📸 拍照 / 上傳辨識手牌
+                </button>
+              </div>
+            </div>
+
+            <div class="player-live-summary">
+              <div>總點數: <span class="highlight-text" id="p2-total-points">0</span> 點</div>
+              <div>折合台幣: <span class="highlight-text money-text" id="p2-total-money">$0</span> 元</div>
+            </div>
+          </div>
+
+          <!-- Player 3 -->
+          <div class="card glass-panel player-card" id="player-card-3">
+            <div class="player-header">
+              <input type="text" class="player-name-input" id="p3-name" value="玩家 3">
+              <span class="player-host-badge" id="p3-host-badge">店東 🍵</span>
+            </div>
+
+            <div class="card-inventory-section">
+              <div class="inventory-header">
+                <span class="label-text">手牌明細</span>
+                <button class="btn-clear-cards" onclick="clearPlayerCards(3)">重置手牌</button>
+              </div>
+              <div class="scan-container" id="p3-scan-container">
+                <div class="inventory-display" id="p3-inventory-display">
+                  <span class="empty-tip">📸 尚無手牌，請拍照或上傳撲克牌辨識</span>
+                </div>
+                <div class="scan-laser-line" id="p3-scan-laser"></div>
+                <div class="scan-overlay-text" id="p3-scan-text">🤖 AI 正在辨識手牌點數...</div>
+              </div>
+              <div class="camera-scan-action">
+                <input type="file" id="p3-photo-input" accept="image/*" capture="camera" style="display: none;" onchange="handlePhotoUpload(3, this.files[0])">
+                <button class="btn btn-success btn-block btn-camera-trigger" id="p3-scan-btn" onclick="triggerPhotoCapture(3)">
+                  📸 拍照 / 上傳辨識手牌
+                </button>
+              </div>
+            </div>
+
+            <div class="player-live-summary">
+              <div>總點數: <span class="highlight-text" id="p3-total-points">0</span> 點</div>
+              <div>折合台幣: <span class="highlight-text money-text" id="p3-total-money">$0</span> 元</div>
+            </div>
+          </div>
+
+          <!-- Player 4 -->
+          <div class="card glass-panel player-card" id="player-card-4">
+            <div class="player-header">
+              <input type="text" class="player-name-input" id="p4-name" value="玩家 4">
+              <span class="player-host-badge" id="p4-host-badge">店東 🍵</span>
+            </div>
+
+            <div class="card-inventory-section">
+              <div class="inventory-header">
+                <span class="label-text">手牌明細</span>
+                <button class="btn-clear-cards" onclick="clearPlayerCards(4)">重置手牌</button>
+              </div>
+              <div class="scan-container" id="p4-scan-container">
+                <div class="inventory-display" id="p4-inventory-display">
+                  <span class="empty-tip">📸 尚無手牌，請拍照或上傳撲克牌辨識</span>
+                </div>
+                <div class="scan-laser-line" id="p4-scan-laser"></div>
+                <div class="scan-overlay-text" id="p4-scan-text">🤖 AI 正在辨識手牌點數...</div>
+              </div>
+              <div class="camera-scan-action">
+                <input type="file" id="p4-photo-input" accept="image/*" capture="camera" style="display: none;" onchange="handlePhotoUpload(4, this.files[0])">
+                <button class="btn btn-success btn-block btn-camera-trigger" id="p4-scan-btn" onclick="triggerPhotoCapture(4)">
+                  📸 拍照 / 上傳辨識手牌
+                </button>
+              </div>
+            </div>
+
+            <div class="player-live-summary">
+              <div>總點數: <span class="highlight-text" id="p4-total-points">0</span> 點</div>
+              <div>折合台幣: <span class="highlight-text money-text" id="p4-total-money">$0</span> 元</div>
+            </div>
+          </div>
+
+          <!-- 店東房租牌 (Special 5th Card) -->
+          <div class="card glass-panel player-card host-rent-card" id="player-card-_host">
+            <div class="player-header">
+              <span class="player-name-static">🍵 店東房租 (紅茶的店)</span>
+            </div>
+
+            <div class="card-inventory-section">
+              <div class="inventory-header">
+                <span class="label-text">房租牌明細</span>
+                <button class="btn-clear-cards" onclick="clearPlayerCards('_host')">重置房租牌</button>
+              </div>
+              <div class="scan-container" id="p_host-scan-container">
+                <div class="inventory-display" id="p_host-inventory-display">
+                  <span class="empty-tip">📸 尚無房租牌，請拍照或上傳撲克牌辨識</span>
+                </div>
+                <div class="scan-laser-line" id="p_host-scan-laser"></div>
+                <div class="scan-overlay-text" id="p_host-scan-text">🤖 AI 正在辨識房租牌點數...</div>
+              </div>
+              <div class="camera-scan-action">
+                <input type="file" id="p_host-photo-input" accept="image/*" capture="camera" style="display: none;" onchange="handlePhotoUpload('_host', this.files[0])">
+                <button class="btn btn-success btn-block btn-camera-trigger" id="p_host-scan-btn" onclick="triggerPhotoCapture('_host')">
+                  📸 拍照 / 上傳辨識房租牌
+                </button>
+              </div>
+            </div>
+
+            <div class="player-live-summary">
+              <div>房租總點數: <span class="highlight-text" id="p_host-total-points">0</span> 點</div>
+              <div>折合台幣: <span class="highlight-text money-text" id="p_host-total-money">$0</span> 元</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Global Action Row -->
+        <div class="action-row">
+          <button class="btn btn-secondary btn-large" onclick="resetAllCalculatorData()">🔄 重置整將數據</button>
+          <button class="btn btn-primary btn-large btn-glow" onclick="calculateSettlement()">🏆 一鍵結算牌局</button>
+        </div>
+
+        <!-- Settlement Report Area -->
+        <div class="card glass-panel settlement-result-card" id="settlement-result-area" style="display: none;">
+          <h2 class="card-title text-center text-gold">🀄️ 本將雀神大結算戰報 🀄️</h2>
+          <div id="settlement-verify-banner"></div>
+          
+          <div class="settlement-grids">
+            <!-- Details Table -->
+            <div class="settlement-details">
+              <h3>📊 玩家收支明細</h3>
+              <div class="table-responsive">
+                <table class="settlement-table">
+                  <thead>
+                    <tr>
+                      <th>對象</th>
+                      <th>手牌/房租牌點數</th>
+                      <th>初始換算</th>
+                      <th>最終應收/應付</th>
+                    </tr>
+                  </thead>
+                  <tbody id="settlement-table-body">
+                    <!-- Dynamic Rows -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Debt Splitter -->
+            <div class="settlement-flows">
+              <h3>💸 最佳轉帳路徑建議</h3>
+              <ul class="flow-list" id="settlement-flow-list">
+                <!-- Dynamic List -->
+              </ul>
+              <div class="total-payout-box" id="host-final-collect-box">
+                <!-- Host final collection note -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Share Area -->
+          <div class="share-box">
+            <h3>📱 分享戰報到 LINE 群組</h3>
+            <div class="line-preview-box">
+              <pre id="line-settlement-text"></pre>
+            </div>
+            <div class="button-row">
+              <button class="btn btn-success btn-block" onclick="copySettlementReport()">📋 複製戰報並分享</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer-info">
+      <p>🀄️ 雀神閣系統 | 撲克換算率：1點 = $20 元 | 花牌 J/Q/K = 15點 ($300)</p>
+    </footer>
+  </div>
+
+  <script src="app.js?v=3.2"></script>
+</body>
+</html>
