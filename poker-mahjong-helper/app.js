@@ -354,6 +354,31 @@ function saveApiKey() {
 function initApiKeyToggle() {
   const keyInput = document.getElementById('gemini-api-key');
   const statusEl = document.getElementById('api-key-status-text');
+  
+  // 1. 優先檢查網址 Query String 中是否有帶入 key 參數 (?key=AIzaSy...)
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlKey = urlParams.get('key');
+  
+  if (urlKey && urlKey.trim().startsWith('AIzaSy')) {
+    const cleanKey = urlKey.trim();
+    localStorage.setItem('gemini_api_key', cleanKey);
+    
+    // 2. 為了安全起見與網址美觀，自動將網址後方的 ?key=... 參數抹除，避免使用者後續複製網址分享時外洩金鑰
+    try {
+      urlParams.delete('key');
+      const newSearch = urlParams.toString();
+      const newUrl = window.location.origin + window.location.pathname + (newSearch ? '?' + newSearch : '') + window.location.hash;
+      window.history.replaceState({}, document.title, newUrl);
+    } catch (e) {
+      console.warn('無法抹除網址中的金鑰參數:', e);
+    }
+    
+    // 提示使用者金鑰已成功自動導入
+    setTimeout(() => {
+      alert('🔑 偵測到網址包含金鑰，已為您自動導入並開通 Gemini Vision AI 功能！');
+    }, 300);
+  }
+
   if (keyInput) {
     const key = localStorage.getItem('gemini_api_key') || '';
     keyInput.value = key;
@@ -404,7 +429,16 @@ function updateMobileQR() {
     pathName = '/poker-mahjong-helper/index.html';
   }
   
-  let targetUrl = `http://${localIp}:${port}${pathName}`;
+  let targetUrl = '';
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  if (window.location.protocol.startsWith('http') && !isLocalhost) {
+    // 如果已經是透過某個 IP (如區域網路) 或 GitHub 網址開啟，則直接使用當前網址作為 QR code 連線來源
+    targetUrl = window.location.origin + window.location.pathname;
+  } else {
+    // 否則 (如本機雙擊打開 file:/// 或 localhost)，採用預設的 Wi-Fi 區域網路 IP
+    targetUrl = `http://${localIp}:${port}${pathName}`;
+  }
+
   if (savedKey) {
     targetUrl += `?key=${encodeURIComponent(savedKey)}`;
   }
@@ -851,47 +885,52 @@ function updateAllCalculations() {
 
 // 重置整將資料
 function resetAllCalculatorData() {
-  if (!confirm('⚠️ 確定要重置目前這一將的所有分數與手牌資料嗎？這將會清除所有暫存資料喔！')) return;
+  showCustomConfirm('⚠️ 確定重置資料？', '確定要重置目前這一將的所有分數與手牌資料嗎？這將會清除所有暫存資料喔！', () => {
+    state.calc.players = {
+      1: { name: state.calc.players[1].name || '玩家 1', cards: [] },
+      2: { name: state.calc.players[2].name || '玩家 2', cards: [] },
+      3: { name: state.calc.players[3].name || '玩家 3', cards: [] },
+      4: { name: state.calc.players[4].name || '玩家 4', cards: [] },
+      '_host': { name: '店東房租', cards: [] }
+    };
 
-  state.calc.players = {
-    1: { name: state.calc.players[1].name || '玩家 1', cards: [] },
-    2: { name: state.calc.players[2].name || '玩家 2', cards: [] },
-    3: { name: state.calc.players[3].name || '玩家 3', cards: [] },
-    4: { name: state.calc.players[4].name || '玩家 4', cards: [] },
-    '_host': { name: '店東房租', cards: [] }
-  };
+    // 重置 DOM 輸入值
+    for (let i = 1; i <= 4; i++) {
+      renderPlayerCards(i);
+      updatePlayerLiveSummary(i);
+    }
+    renderPlayerCards('_host');
+    updatePlayerLiveSummary('_host');
 
-  for (let i = 1; i <= 4; i++) {
-    renderPlayerCards(i);
-    updatePlayerLiveSummary(i);
-  }
-  renderPlayerCards('_host');
-  updatePlayerLiveSummary('_host');
+    // 隱藏結算區
+    const resultArea = document.getElementById('settlement-result-area');
+    if (resultArea) resultArea.style.display = 'none';
 
-  const resultArea = document.getElementById('settlement-result-area');
-  if (resultArea) resultArea.style.display = 'none';
-
-  updateAllCalculations();
-  saveToLocalStorage();
+    updateAllCalculations();
+    saveToLocalStorage();
+  });
 }
 
-// 🏆 一鍵結算牌局
+// 🏆 核心邏輯：一鍵結算牌局並生成最少轉帳路徑
 function calculateSettlement() {
   updateAllCalculations();
 
   const hostVal = state.calc.hostPlayer;
   const initialBuyinPoints = state.calc.initialBuyin;
-  const initialBuyinMoney = initialBuyinPoints * POINT_MULTIPLIER;
+  const initialBuyinMoney = initialBuyinPoints * POINT_MULTIPLIER; // 初始買入台幣
 
+  // 驗證是否選擇店東
   if (hostVal === 'none') {
-    alert('🍵 結算前請先選擇本局的「店東」！這會關係到店東房租的最終支付流向。');
-    const sel = document.getElementById('calc-host-select');
-    if (sel) sel.focus();
+    showCustomAlert('🍵 請選擇店東', '結算前請先選擇本局的「店東」！這會關係到店東房租的最終支付流向。', () => {
+      const sel = document.getElementById('calc-host-select');
+      if (sel) sel.focus();
+    });
     return;
   }
 
+  // 獲取店東房租資料
   const hostScore = getPlayerScore('_host');
-  const totalRentFund = hostScore.money;
+  const totalRentFund = hostScore.money; // 店東房租台幣金額
 
   // 1. 驗證整副牌的張數與點數（52張/400點）
   let totalCardsCount = 0;
@@ -907,18 +946,25 @@ function calculateSettlement() {
     const cardDiff = 52 - totalCardsCount;
     const pointDiff = 400 - totalPointsSum;
     
-    let warningMsg = `⚠️ ⚠️ 結算防呆對帳警告 ⚠️ ⚠️\n\n`;
-    warningMsg += `目前錄入的總卡片統計與標準牌組（52張/400點）不符：\n`;
-    warningMsg += `📌 總張數：${totalCardsCount} 張 (標準應為 52 張，目前 ${cardDiff > 0 ? `少了 ${cardDiff} 張` : `多了 ${Math.abs(cardDiff)} 張`})\n`;
-    warningMsg += `📌 總點數：${totalPointsSum} 點 (標準應為 400 點，目前 ${pointDiff > 0 ? `少了 ${pointDiff} 點` : `多了 ${Math.abs(pointDiff)} 點`})\n\n`;
-    warningMsg += `這代表撲克牌有重疊、漏拍或 AI 解析錯誤！\n`;
-    warningMsg += `建議您點擊「取消」返回檢查並透過手牌區修正。\n`;
-    warningMsg += `（提示：點擊手牌區 6/9 可以快速切換，點擊 × 可刪除該牌）\n\n`;
-    warningMsg += `請問您是否要【強制進行結算】？(強制結算帳目可能不平衡)`;
+    let warningMsg = `目前錄入的總卡片統計與標準牌組（52張/400點）不符：<br><br>`;
+    warningMsg += `📌 總張數：<strong>${totalCardsCount}</strong> 張 (標準應為 52 張，目前 ${cardDiff > 0 ? `少了 ${cardDiff} 張` : `多了 ${Math.abs(cardDiff)} 張`})<br>`;
+    warningMsg += `📌 總點數：<strong>${totalPointsSum}</strong> 點 (標準應為 400 點，目前 ${pointDiff > 0 ? `少了 ${pointDiff} 點` : `多了 ${Math.abs(pointDiff)} 點`})<br><br>`;
+    warningMsg += `這代表撲克牌有重疊、漏拍或 AI 解析錯誤！建議您返回檢查並透過手牌區修正。<br>`;
+    warningMsg += `（提示：點擊手牌區 6/9 可以快速切換，點擊 × 可刪除該牌）<br><br>`;
+    warningMsg += `請問您是否要<strong>【強制進行結算】</strong>？(強制結算帳目可能不平衡)`;
     
-    if (!confirm(warningMsg)) return;
+    showCustomConfirm('⚠️ 結算防呆對帳警告', warningMsg, () => {
+      executeSettlementCalculation(hostVal, initialBuyinMoney, hostScore, totalRentFund, totalCardsCount, totalPointsSum);
+    });
+    return;
   }
 
+  // 完美對帳，直接結算
+  executeSettlementCalculation(hostVal, initialBuyinMoney, hostScore, totalRentFund, totalCardsCount, totalPointsSum);
+}
+
+// 實際執行結算數據計算與 UI 渲染
+function executeSettlementCalculation(hostVal, initialBuyinMoney, hostScore, totalRentFund, totalCardsCount, totalPointsSum) {
   // 渲染頁面上的驗證 Banner
   const verifyBanner = document.getElementById('settlement-verify-banner');
   if (verifyBanner) {
@@ -935,9 +981,12 @@ function calculateSettlement() {
     }
   }
 
+  // 結帳才以最後一將分東南西北玩家
   const windDirections = { 1: '東風', 2: '南風', 3: '西風', 4: '北風' };
+
+  // 整理 4 位玩家的結算數據
   let playerData = [];
-  let totalCardsMoney = 0;
+  let totalCardsMoney = 0; // 四人最後牌面折算總金額
   
   for (let i = 1; i <= 4; i++) {
     const player = state.calc.players[i];
@@ -951,18 +1000,21 @@ function calculateSettlement() {
       cardsPoints: score.points,
       cardsMoney: score.money,
       initialMoney: initialBuyinMoney,
-      finalBalance: 0,
-      netValue: 0
+      finalBalance: 0,   // 最後淨賺賠值
+      netValue: 0        // 用於分帳演算法
     });
   }
 
+  // 對帳驗證：四人手牌的總金額 + 店東房租，是否等於四人買入的總金額？
   const expectedTotalMoney = initialBuyinMoney * 4;
   const discrepancy = (totalCardsMoney + totalRentFund) - expectedTotalMoney;
 
+  // 計算每個玩家的最終「淨輸贏值 (Net Balance)」
   playerData.forEach(p => {
     p.finalBalance = p.cardsMoney - p.initialMoney;
   });
 
+  // 如果店東是四人之一，將店東房租自動歸併加給他
   let externalHostFund = 0;
   if (hostVal.startsWith('p')) {
     const hostNum = parseInt(hostVal.substring(1));
@@ -999,6 +1051,7 @@ function calculateSettlement() {
       tbody.appendChild(row);
     });
 
+    // 追加店東房租到表格顯示中
     if (totalRentFund > 0 || hostVal === 'external') {
       const row = document.createElement('tr');
       const balanceClass = totalRentFund > 0 ? 'net-positive' : '';
@@ -1014,7 +1067,7 @@ function calculateSettlement() {
     }
   }
 
-  // 3. 💸 執行轉帳最簡化分帳演算法
+  // 3. 💸 執行轉帳最簡化分帳演算法 (Min-cash-flow algorithm)
   let participants = [];
   playerData.forEach(p => {
     participants.push({ name: `${p.name} (${p.wind})`, amount: p.netValue });
@@ -1024,6 +1077,7 @@ function calculateSettlement() {
     participants.push({ name: '🍵 店東 (紅茶)', amount: externalHostFund }); 
   }
 
+  // 整理分帳資料
   let debtors = participants.filter(x => x.amount < 0).sort((a, b) => a.amount - b.amount); 
   let creditors = participants.filter(x => x.amount > 0).sort((a, b) => b.amount - a.amount); 
 
@@ -1039,6 +1093,7 @@ function calculateSettlement() {
 
     let debtAmt = Math.abs(debtor.amount);
     let creditAmt = creditor.amount;
+
     let transferAmt = Math.min(debtAmt, creditAmt);
     
     if (transferAmt > 0.1) { 
@@ -1056,6 +1111,7 @@ function calculateSettlement() {
     if (Math.abs(creditor.amount) < 0.1) cIdx++;
   }
 
+  // 渲染最佳轉帳建議路徑
   const flowList = document.getElementById('settlement-flow-list');
   if (flowList) {
     flowList.innerHTML = '';
@@ -1075,13 +1131,24 @@ function calculateSettlement() {
     }
   }
 
+  // 渲染店東實收公積金提示
   const hostNoteBox = document.getElementById('host-final-collect-box');
   if (hostNoteBox) {
+    let hostNameText = '';
+    if (hostVal.startsWith('p')) {
+      const hostP = state.calc.players[parseInt(hostVal.substring(1))];
+      const hostWind = windDirections[parseInt(hostVal.substring(1))];
+      hostNameText = `<strong>${hostP.name} (${hostWind})</strong>`;
+    } else {
+      hostNameText = `<strong>店東 (紅茶)</strong>`;
+    }
+
     let hostPotTip = `🍵 <b>店東房租辨識對帳提醒</b>：<br>
                   店東專屬房租牌累計辨識 <strong>${hostScore.points}</strong> 點。<br>
                   店東應收房租折合台幣：<strong>$${totalRentFund}</strong> 元。<br>
                   本場房租已完全參與零和分帳結算。大家直接依照上方的轉帳建議路徑進行轉帳支付即可！`;
 
+    // 對帳警示
     let discrepancyTip = '';
     if (discrepancy !== 0) {
       const absDisc = Math.abs(discrepancy);
@@ -1092,6 +1159,7 @@ function calculateSettlement() {
                          可能原因：有撲克牌漏算、點數解析錯誤，或照片中牌面有遮擋。請檢查五張手牌與房租牌的實體撲克牌！
                        </div>`;
     }
+
     hostNoteBox.innerHTML = hostPotTip + discrepancyTip;
   }
 
@@ -1100,6 +1168,7 @@ function calculateSettlement() {
   const mvp = sortedByProfit[0];
   const loser = sortedByProfit[3];
   
+  // 隨機幽默話術資料庫
   const mvpSlogans = [
     "實至名規，今晚宵夜你請客！🍗",
     "手氣紅到擋不住，雀神附體！🔥",
@@ -1253,6 +1322,11 @@ function loadFromLocalStorage() {
     localStorage.setItem('gemini_api_key', urlKey.trim());
     const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
     window.history.replaceState({ path: cleanUrl }, '', cleanUrl);
+
+    // 提示使用者金鑰已成功自動導入
+    setTimeout(() => {
+      showCustomAlert('🔑 金鑰導入成功', '系統已為您自動導入 API 金鑰並開通 Gemini Vision AI 功能！<br>現在您可以使用手機相機拍照，自動辨識四人手牌與店東房租牌囉！🀄️');
+    }, 500);
   }
 
   const saved = localStorage.getItem(STATE_KEY);
@@ -1336,4 +1410,76 @@ function toggleAdvancedSettings() {
       block.style.display = 'none';
     }
   }
+}
+
+// 🏆 Premium 訂製對話框與確認框 (解決 LINE 內建瀏覽器阻擋 alert / confirm 的 Bug)
+function showCustomAlert(title, message, callback) {
+  const overlay = document.getElementById('custom-modal-overlay');
+  const titleEl = document.getElementById('custom-modal-title');
+  const messageEl = document.getElementById('custom-modal-message');
+  const actionsEl = document.getElementById('custom-modal-actions');
+  
+  if (!overlay || !titleEl || !messageEl || !actionsEl) {
+    alert(message.replace(/<br>/g, '\n').replace(/<\/?[^>]+(>|$)/g, ""));
+    if (callback) callback();
+    return;
+  }
+
+  titleEl.innerHTML = title;
+  messageEl.innerHTML = message;
+  
+  actionsEl.innerHTML = '';
+  const btn = document.createElement('button');
+  btn.className = 'custom-modal-btn custom-modal-btn-confirm';
+  btn.textContent = '確定';
+  btn.onclick = () => {
+    overlay.classList.remove('modal-active');
+    if (callback) callback();
+  };
+  actionsEl.appendChild(btn);
+  
+  overlay.classList.add('modal-active');
+}
+
+function showCustomConfirm(title, message, onConfirm, onCancel) {
+  const overlay = document.getElementById('custom-modal-overlay');
+  const titleEl = document.getElementById('custom-modal-title');
+  const messageEl = document.getElementById('custom-modal-message');
+  const actionsEl = document.getElementById('custom-modal-actions');
+  
+  if (!overlay || !titleEl || !messageEl || !actionsEl) {
+    const result = confirm(message.replace(/<br>/g, '\n').replace(/<\/?[^>]+(>|$)/g, ""));
+    if (result) {
+      if (onConfirm) onConfirm();
+    } else {
+      if (onCancel) onCancel();
+    }
+    return;
+  }
+
+  titleEl.innerHTML = title;
+  messageEl.innerHTML = message;
+  
+  actionsEl.innerHTML = '';
+  
+  const btnCancel = document.createElement('button');
+  btnCancel.className = 'custom-modal-btn custom-modal-btn-cancel';
+  btnCancel.textContent = '取消';
+  btnCancel.onclick = () => {
+    overlay.classList.remove('modal-active');
+    if (onCancel) onCancel();
+  };
+  
+  const btnConfirm = document.createElement('button');
+  btnConfirm.className = 'custom-modal-btn custom-modal-btn-confirm';
+  btnConfirm.textContent = '確定';
+  btnConfirm.onclick = () => {
+    overlay.classList.remove('modal-active');
+    if (onConfirm) onConfirm();
+  };
+  
+  actionsEl.appendChild(btnCancel);
+  actionsEl.appendChild(btnConfirm);
+  
+  overlay.classList.add('modal-active');
 }
