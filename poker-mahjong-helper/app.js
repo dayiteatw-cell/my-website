@@ -2175,7 +2175,7 @@ function renderMjHand() {
   countEl.textContent = tiles.length;
   
   if (tiles.length === 0) {
-    display.innerHTML = `<span class="empty-tip">📸 請拍照或上傳手牌照片，或直接在右側點選鍵盤手動輸入</span>`;
+    display.innerHTML = `<span class="empty-tip">🀄️ 目前無立牌，請直接點選下方鍵盤手動輸入手牌</span>`;
     return;
   }
   
