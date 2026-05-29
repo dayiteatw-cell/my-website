@@ -496,6 +496,12 @@ input:focus, select:focus {
   border: 1px solid rgba(255, 255, 255, 0.02);
 }
 
+.label-text {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
 .counter-control {
   display: flex;
   align-items: center;
@@ -579,6 +585,13 @@ input:focus, select:focus {
   gap: 6px;
   align-content: center;
   margin-bottom: 12px;
+}
+
+.empty-tip {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-align: center;
+  width: 100%;
 }
 
 /* Visual Card Badges */
@@ -1233,6 +1246,55 @@ input:focus, select:focus {
   .api-help-tip {
     font-size: 0.9rem;
   }
+
+  /* Navigation Tab Mobile Optimization */
+  .app-nav {
+    gap: 6px;
+    padding: 4px;
+    border-radius: var(--radius-md);
+  }
+  
+  .nav-tab {
+    padding: 8px 4px;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    border-radius: 6px;
+  }
+
+  /* Mahjong Mobile Layout Optimization */
+  .mj-inventory-display {
+    padding: 10px;
+    gap: 6px;
+    min-height: 80px;
+  }
+  
+  .mj-tile {
+    width: 34px;
+    height: 46px;
+    font-size: 0.9rem;
+    box-shadow: 0 3px 0 #1b4d3e, 0 4px 6px rgba(0,0,0,0.5);
+  }
+
+  .mj-keyboard-row {
+    gap: 4px !important;
+  }
+
+  .btn-mj-tile {
+    width: 32px;
+    height: 42px;
+    font-size: 0.82rem;
+    box-shadow: 0 2px 0 #1b4d3e, 0 3px 4px rgba(0,0,0,0.4);
+  }
+
+  .mj-analysis-table th, .mj-analysis-table td {
+    padding: 8px 4px;
+    font-size: 0.8rem;
+  }
+
+  .mj-status-banner {
+    padding: 10px;
+    font-size: 0.95rem;
+  }
 }
 
 /* API Config & Password Toggle Styling */
@@ -1502,3 +1564,211 @@ input:focus, select:focus {
   background-color: rgba(255, 255, 255, 0.12);
   color: var(--text-primary);
 }
+
+/* ==========================================================================
+   🀄️ 麻將聽牌神器專屬樣式 (Mahjong Helper Styles)
+   ========================================================================== */
+
+.mj-layout-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 25px;
+}
+
+.mj-left-panel, .mj-right-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.mj-inventory-display {
+  background-color: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border-felt);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  min-height: 90px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-content: center;
+  margin-bottom: 12px;
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.4);
+}
+
+/* 🀄️ 3D 立體實體質感麻將骨牌 */
+.mj-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 56px;
+  background: linear-gradient(135deg, #ffffff 0%, #fcfcfc 40%, #ececec 100%);
+  border-radius: 5px;
+  box-shadow: 0 4px 0 #1b4d3e, 0 6px 8px rgba(0,0,0,0.6); /* 綠色骨牌背面厚度層 */
+  border: 1px solid #e0e0e0;
+  border-bottom: 1px solid #ccc;
+  position: relative;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 1.15rem;
+  user-select: none;
+  transition: all 0.2s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+  animation: popIn 0.2s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+  margin-bottom: 4px;
+}
+
+.mj-tile:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 9px 0 var(--accent-danger), 0 11px 12px rgba(0,0,0,0.7); /* 懸停變紅厚度 */
+  background: linear-gradient(135deg, #fff0f0 0%, #ffe3e3 100%);
+  border-color: var(--accent-danger);
+}
+
+/* 虛擬鍵盤麻將按鈕 */
+.btn-mj-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 48px;
+  background: linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%);
+  border-radius: 4px;
+  box-shadow: 0 3px 0 #1b4d3e, 0 4px 5px rgba(0,0,0,0.5);
+  border: 1px solid #dcdcdc;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.95rem;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.btn-mj-tile:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 0 #2a7a62, 0 7px 10px rgba(0,0,0,0.6);
+  background: linear-gradient(135deg, #eafcf7 0%, #c4f7eb 100%);
+  border-color: var(--accent-mint);
+}
+
+.btn-mj-tile:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 0 #1b4d3e, 0 1px 2px rgba(0,0,0,0.5);
+}
+
+/* 麻將花色字型顏色設定 */
+.mj-wan {
+  color: #c92a2a; /* 傳統中式大紅 */
+  text-shadow: 0 0 1px rgba(199, 42, 42, 0.1);
+}
+
+.mj-tong {
+  color: #1c7ed6; /* 皇家深藍 */
+}
+
+.mj-suo {
+  color: #2b8a3e; /* 翡翠祖母綠 */
+}
+
+.mj-zi {
+  color: #2b8a3e; /* 字牌發為綠 */
+}
+
+.mj-zi.mj-zhong {
+  color: #c92a2a; /* 中為紅 */
+}
+
+.mj-zi.mj-bai {
+  color: #495057; /* 白為框灰 */
+  border: 2px dashed #adb5bd;
+  border-radius: 3px;
+  width: 20px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  background: transparent;
+}
+
+/* 狀態 Banner 樣式 */
+.mj-status-banner {
+  padding: 14px;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  font-size: 1.15rem;
+  margin-bottom: 20px;
+  text-align: center;
+  border: 1px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.mj-status-banner.tenpai {
+  background: linear-gradient(135deg, var(--accent-mint-glow) 0%, rgba(27,201,100,0.1) 100%);
+  color: hsl(145, 80%, 80%);
+  border-color: var(--accent-mint);
+}
+
+.mj-status-banner.shanten-1 {
+  background: linear-gradient(135deg, var(--accent-gold-glow) 0%, rgba(229,169,59,0.1) 100%);
+  color: hsl(45, 95%, 75%);
+  border-color: var(--accent-gold);
+}
+
+.mj-status-banner.shanten-other {
+  background-color: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+  border-color: var(--border-felt);
+}
+
+/* 智能分析細節 */
+.mj-analysis-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font-size: 0.95rem;
+}
+
+.mj-analysis-table th, .mj-analysis-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-felt);
+}
+
+.mj-analysis-table th {
+  color: var(--text-secondary);
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.mj-analysis-table tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.mj-analysis-table td.optimal {
+  color: var(--accent-gold);
+  font-weight: 700;
+}
+
+.mj-analysis-table td.suboptimal {
+  color: var(--text-primary);
+}
+
+.mj-analysis-panel {
+  animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.mj-keyboard-title {
+  border-left: 2px solid var(--accent-mint);
+  padding-left: 8px;
+  margin-top: 14px;
+}
+
+@media (max-width: 900px) {
+  .mj-layout-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
+

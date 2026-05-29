@@ -57,6 +57,9 @@ let state = {
       4: { name: '玩家 4', cards: [] },
       '_host': { name: '店東房租', cards: [] }
     }
+  },
+  mj: {
+    tiles: [] // 目前手牌 (0~33 數字)
   }
 };
 
@@ -99,6 +102,10 @@ function init() {
   // 即時更新 LINE 約戰預覽
   readMatchForm();
   updateLineTemplate();
+
+  // 初始化麻將聽牌神器
+  initMjKeyboard();
+  analyzeMjHand();
 }
 
 // 填充月份、日期與時間選單
@@ -661,6 +668,7 @@ async function callGeminiVisionAPI(base64Data, mimeType, playerNum) {
   }
 
   // 定義候選的 API 終端節點與模型順序，進行自動容錯切換 (Self-healing Fallbacks)
+  // 注意：gemini-2.5-flash 是原始成功運行的模型，必須排在第一優先
   const endpoints = [
     {
       url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
@@ -735,7 +743,9 @@ async function callGeminiVisionAPI(base64Data, mimeType, playerNum) {
           const errText = await response.text();
           const errJson = JSON.parse(errText);
           errMsg = errJson.error?.message || errMsg;
-        } catch (e) {}
+        } catch (e) {
+          // 非 JSON 格式的回傳
+        }
         throw new Error(errMsg);
       }
 
@@ -788,16 +798,16 @@ async function callGeminiVisionAPI(base64Data, mimeType, playerNum) {
             try {
               const verifyPrompt = `This image shows ${mappedCards.length} poker cards. I need you to determine exactly how many are 6s and how many are 9s. For EACH card that could be 6 or 9, count the pip symbols (suit icons) in the CENTER of that card's body. A card with 6 pips is a 6. A card with 9 pips is a 9. Return a JSON object like: {"sixes": 2, "nines": 1} indicating the count of 6-cards and 9-cards. If there are no 6s or 9s, return {"sixes": 0, "nines": 0}.`;
               const verifyBody = {
-                 contents: [{
-                   parts: [
-                     { text: verifyPrompt },
-                     { inlineData: { mimeType: mimeType, data: base64Data } }
-                   ]
-                 }],
-                 generationConfig: {
-                   responseMimeType: "application/json",
-                   thinkingConfig: { thinkingBudget: 2048 }
-                 }
+                contents: [{
+                  parts: [
+                    { text: verifyPrompt },
+                    { inlineData: { mimeType: mimeType, data: base64Data } }
+                  ]
+                }],
+                generationConfig: {
+                  responseMimeType: "application/json",
+                  thinkingConfig: { thinkingBudget: 2048 }
+                }
               };
               const vResp = await fetch(endpoint.url, {
                 method: 'POST',
@@ -848,13 +858,14 @@ async function callGeminiVisionAPI(base64Data, mimeType, playerNum) {
           alert(`🤖 成功辨識！已為【${ownerName}】自動錄入 ${mappedCards.length} 張牌！`);
         }
         success = true;
-        break;
+        break; // 成功後跳出迴圈
       } else {
         throw new Error('回傳資料格式非陣列');
       }
     } catch (error) {
       console.warn(`Endpoint ${endpoint.desc} failed:`, error.message);
       lastError = error;
+      // 繼續嘗試下一個候選 endpoint
     }
   }
 
@@ -928,19 +939,20 @@ function renderPlayerCards(playerNum) {
       }
     };
 
-    // 新增獨立的刪除按鈕
+    // 新增獨立的刪除按鈕，解決 6/9 卡片無法被刪除的 Bug，並提升操作流暢度
     const deleteBtn = document.createElement('span');
     deleteBtn.className = 'card-badge-delete';
     deleteBtn.innerHTML = '&times;';
     deleteBtn.title = '刪除此牌';
     deleteBtn.onclick = (e) => {
-      e.stopPropagation();
+      e.stopPropagation(); // 阻止事件冒泡，避免觸發 6/9 切換
       const realIndex = cards.indexOf(cardVal);
       if (realIndex > -1) {
         removeCardAtIndex(playerNum, realIndex);
       }
     };
     badge.appendChild(deleteBtn);
+
     display.appendChild(badge);
   });
 }
@@ -1258,7 +1270,7 @@ function executeSettlementCalculation(hostVal, initialBuyinMoney, hostScore, tot
                   店東應收房租折合台幣：<strong>$${totalRentFund}</strong> 元。<br>
                   本場房租已完全參與零和分帳結算。大家直接依照上方的轉帳建議路徑進行轉帳支付即可！`;
 
-    // 對帳警示
+    // 对账警示
     let discrepancyTip = '';
     if (discrepancy !== 0) {
       const absDisc = Math.abs(discrepancy);
@@ -1280,7 +1292,7 @@ function executeSettlementCalculation(hostVal, initialBuyinMoney, hostScore, tot
   
   // 隨機幽默話術資料庫
   const mvpSlogans = [
-    "實至名規，今晚宵夜你請客！🍗",
+    "實至名歸，今晚宵夜你請客！🍗",
     "手氣紅到擋不住，雀神附體！🔥",
     "大開殺戒，晚餐可以無痛加雞腿了！🍱",
     "今晚做夢都會笑醒吧！💰",
@@ -1291,7 +1303,7 @@ function executeSettlementCalculation(hostVal, initialBuyinMoney, hostScore, tot
   
   const loserSlogans = [
     "大義滅親，感謝大哥為生態做出的卓越貢獻！🌳",
-    "功德無量，今晚的大家都是托您的福！🕊️",
+    "功功無量，今晚的大家都是托您的福！🕊️",
     "沒關係，留得青山在，下半將贏回來！⛰️",
     "默默承受了一切，你才是真正的英雄！🦸‍♂️",
     "繳點學費而已，下次換你大殺四方！⚔️",
@@ -1325,7 +1337,10 @@ function executeSettlementCalculation(hostVal, initialBuyinMoney, hostScore, tot
     loserText = `💸 【慈善撲克王】：🤡 ${loser.name} 🤡 (今日功德無量 -$${Math.abs(loser.finalBalance)} 元)\n💬 悄悄話：${randomLoser}\n`;
   }
 
-  let lineSettlement = `🀄️ **【雀神閣 ‧ 牌局大結算戰報】** 🀄️\n\n📊 **玩家收支最終明細**：\n`;
+  let lineSettlement = `🀄️ **【雀神閣 ‧ 牌局大結算戰報】** 🀄️
+
+📊 **玩家收支最終明細**：
+`;
 
   playerData.forEach(p => {
     const sign = p.finalBalance > 0 ? '+' : (p.finalBalance < 0 ? '-' : ' ');
@@ -1333,14 +1348,25 @@ function executeSettlementCalculation(hostVal, initialBuyinMoney, hostScore, tot
     lineSettlement += `* 👤 ${p.name}：手牌 ${p.cardsPoints}點 ➔ 最終淨盈虧 ${sign}$${amt}\n`;
   });
 
-  lineSettlement += `\n🍵 **店東房租明細**：\n* 實收房租：${hostScore.points}點 ➔ 換算台幣金額：$${totalRentFund} 元\n`;
+  lineSettlement += `
+🍵 **店東房租明細**：
+* 實收房租：${hostScore.points}點 ➔ 換算台幣金額：$${totalRentFund} 元
+`;
 
+  // 🔍 牌組驗證
   const isPerfectDeck = (totalCardsCount === 52 && totalPointsSum === 400);
   const deckVerifyText = isPerfectDeck 
     ? `✅ 完美驗證：整副牌組共 52 張、點數 400 點，帳目 100% 精準平衡！`
     : `⚠️ 對帳警告：目前僅錄入共 ${totalCardsCount} 張牌、總點數 ${totalPointsSum} 點 (標準應為 52 張/400 點)，請核對實體牌！`;
 
-  lineSettlement += `\n🔍 **牌組完整度驗證**：\n* ${deckVerifyText}\n\n💸 **最佳轉帳建議 (省去二度轉帳，直接付這筆即可)**：\n`;
+  lineSettlement += `
+🔍 **牌組完整度驗證**：
+* ${deckVerifyText}
+`;
+
+  lineSettlement += `
+💸 **最佳轉帳建議 (省去二度轉帳，直接付這筆即可)**：
+`;
 
   if (transferFlows.length === 0) {
     lineSettlement += `* 大家大平手，沒有人需要轉帳！\n`;
@@ -1350,7 +1376,11 @@ function executeSettlementCalculation(hostVal, initialBuyinMoney, hostScore, tot
     });
   }
 
-  lineSettlement += `\n${mvpText}${loserText}\n${randomQuote}\n\n🎴 感謝大家的參與！期待下一將再戰！`;
+  lineSettlement += `
+${mvpText}${loserText}
+${randomQuote}
+
+🎴 感謝大家的參與！期待下一將再戰！`;
 
   const textEl = document.getElementById('line-settlement-text');
   if (textEl) textEl.textContent = lineSettlement;
@@ -1372,7 +1402,7 @@ function copySettlementReport() {
   copyTextToClipboard(text, '🎉 雀神大結算戰報已複製！趕快貼回 LINE 群組向大家報告盈虧吧！');
 }
 
-// 通用剪貼簿複製函數
+// 通用剪貼簿複製函數 (相容 HTTP / 手機瀏覽器等非安全上下文)
 function copyTextToClipboard(text, successMsg) {
   if (navigator.clipboard && window.isSecureContext) {
     navigator.clipboard.writeText(text).then(() => {
@@ -1386,18 +1416,22 @@ function copyTextToClipboard(text, successMsg) {
   }
 }
 
-// 備用複製方案
+// 備用複製方案 (建立臨時 textarea)
 function fallbackCopyText(text, successMsg) {
   const textArea = document.createElement("textarea");
   textArea.value = text;
+  
+  // 隱藏元素以避免版面跳動
   textArea.style.top = "0";
   textArea.style.left = "0";
   textArea.style.position = "fixed";
   textArea.style.opacity = "0";
+  
   document.body.appendChild(textArea);
   textArea.focus();
   textArea.select();
   
+  // iOS 系統的選取與複製優化
   const range = document.createRange();
   range.selectNodeContents(textArea);
   const selection = window.getSelection();
@@ -1416,6 +1450,7 @@ function fallbackCopyText(text, successMsg) {
     console.error('Fallback copy failed: ', err);
     alert('⚠️ 複製失敗，請手動長按預覽文字進行複製。');
   }
+  
   document.body.removeChild(textArea);
 }
 
@@ -1426,10 +1461,12 @@ function saveToLocalStorage() {
 
 // 從 LocalStorage 載入資料
 function loadFromLocalStorage() {
+  // 自動解析網址中的 ?key=AIzaSy... 參數，實現一鍵自動設定金鑰
   const urlParams = new URLSearchParams(window.location.search);
   const urlKey = urlParams.get('key');
   if (urlKey && urlKey.trim().startsWith('AIzaSy')) {
     localStorage.setItem('gemini_api_key', urlKey.trim());
+    // 移除網址中的金鑰參數以維護隱私
     const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
     window.history.replaceState({ path: cleanUrl }, '', cleanUrl);
 
@@ -1447,6 +1484,7 @@ function loadFromLocalStorage() {
     if (parsed.match) {
       state.match = { ...state.match, ...parsed.match };
       
+      // 回填約戰 UI
       const monthEl = document.getElementById('match-month');
       const dayEl = document.getElementById('match-day');
       const timeEl = document.getElementById('match-time');
@@ -1478,6 +1516,7 @@ function loadFromLocalStorage() {
         }
       }
       
+      // 回填計分 UI
       if (document.getElementById('calc-host-select')) {
         document.getElementById('calc-host-select').value = state.calc.hostPlayer;
       }
@@ -1492,6 +1531,12 @@ function loadFromLocalStorage() {
         }
       }
     }
+    
+    if (parsed.mj) {
+      state.mj = {
+        tiles: parsed.mj.tiles || []
+      };
+    }
   } catch (e) {
     console.error('Error loading state from localStorage:', e);
   }
@@ -1499,7 +1544,7 @@ function loadFromLocalStorage() {
 
 // 頁籤切換
 function switchTab(tabName) {
-  const tabs = ['match', 'calc'];
+  const tabs = ['match', 'calc', 'mj'];
   tabs.forEach(t => {
     const btn = document.getElementById(`tab-btn-${t}`);
     const content = document.getElementById(`tab-${t}`);
@@ -1600,3 +1645,744 @@ function showCustomConfirm(title, message, onConfirm, onCancel) {
   
   overlay.classList.add('modal-active');
 }
+
+// ==========================================================================
+// 🀄️ 台灣 16 張麻將向聽數與智能分析演算法 (Taiwanese 16-Tile Mahjong Solver)
+// ==========================================================================
+
+const MJ_TILE_NAMES = [
+  "一萬", "二萬", "三萬", "四萬", "五萬", "六萬", "七萬", "八萬", "九萬",
+  "一筒", "二筒", "三筒", "四筒", "五筒", "六筒", "七筒", "八筒", "九筒",
+  "一條", "二條", "三條", "四條", "五條", "六條", "七條", "八條", "九條",
+  "東風", "南風", "西風", "北風", "紅中", "青發", "白板"
+];
+
+// 取得麻將牌類別 class 名稱與顯示文字
+function getMjTileInfo(tileIdx) {
+  const name = MJ_TILE_NAMES[tileIdx];
+  if (!name) return { text: '', cls: '', label: '' };
+  
+  let text = name[0];
+  let cls = '';
+  let label = name;
+  
+  if (tileIdx < 9) {
+    cls = 'mj-wan';
+    text = name[0] + '萬';
+  } else if (tileIdx < 18) {
+    cls = 'mj-tong';
+    text = name[0] + '筒';
+  } else if (tileIdx < 27) {
+    cls = 'mj-suo';
+    text = name[0] + '條';
+  } else {
+    cls = 'mj-zi';
+    if (name === "紅中") {
+      cls += ' mj-zhong';
+      text = '中';
+    } else if (name === "青發") {
+      cls += ' mj-green';
+      text = '發';
+    } else if (name === "白板") {
+      cls += ' mj-bai';
+      text = '';
+    } else {
+      text = name[0];
+    }
+  }
+  return { text, cls, label };
+}
+
+// 核心演算法：計算台灣麻將立牌向聽數 (支援吃碰明牌後手牌 17-3K 或 16-3K 張)
+function calculateMjShanten(counts) {
+  const N = counts.reduce((a, b) => a + b, 0);
+  let targetMelds = 5;
+  if ((16 - N) % 3 === 0) {
+    targetMelds = 5 - (16 - N) / 3;
+  } else if ((17 - N) % 3 === 0) {
+    targetMelds = 5 - (17 - N) / 3;
+  } else {
+    // 預設 fallback
+    targetMelds = 5;
+  }
+  let minShanten = targetMelds * 2 + 1;
+
+  function dfs(tileIdx, melds, partials, pairs) {
+    // 剪枝
+    const currentNeeded = targetMelds - melds;
+    let currentShanten;
+    if (pairs > 0) {
+      currentShanten = Math.max(0, currentNeeded - Math.min(currentNeeded, partials));
+    } else {
+      currentShanten = Math.max(0, currentNeeded - Math.min(currentNeeded, partials)) + 1;
+    }
+    const currentBestPossible = currentShanten - 1;
+    if (currentBestPossible >= minShanten) return;
+
+    if (tileIdx >= 34) {
+      let neededMelds = targetMelds - melds;
+      let shanten = 0;
+      if (pairs > 0) {
+        if (partials >= neededMelds) {
+          shanten = neededMelds;
+        } else {
+          shanten = partials + (neededMelds - partials) * 2;
+        }
+      } else {
+        if (partials >= neededMelds) {
+          shanten = neededMelds + 1;
+        } else {
+          shanten = partials + (neededMelds - partials) * 2 + 1;
+        }
+      }
+      minShanten = Math.min(minShanten, shanten - 1);
+      return;
+    }
+
+    const count = counts[tileIdx];
+    if (count === 0) {
+      dfs(tileIdx + 1, melds, partials, pairs);
+      return;
+    }
+
+    // 1. 刻子 (Pon)
+    if (count >= 3) {
+      counts[tileIdx] -= 3;
+      dfs(tileIdx, melds + 1, partials, pairs);
+      counts[tileIdx] += 3;
+    }
+
+    // 2. 將牌 (雀頭 - 限一組)
+    if (count >= 2 && pairs === 0) {
+      counts[tileIdx] -= 2;
+      dfs(tileIdx, melds, partials, pairs + 1);
+      counts[tileIdx] += 2;
+    }
+
+    // 3. 對子當成搭子
+    if (count >= 2) {
+      counts[tileIdx] -= 2;
+      dfs(tileIdx, melds, partials + 1, pairs);
+      counts[tileIdx] += 2;
+    }
+
+    // 4. 順子 (Chii)
+    const isMian = tileIdx < 27;
+    const isSuitEnd = tileIdx % 9 >= 7;
+    if (isMian && !isSuitEnd) {
+      if (counts[tileIdx] >= 1 && counts[tileIdx + 1] >= 1 && counts[tileIdx + 2] >= 1) {
+        counts[tileIdx]--;
+        counts[tileIdx + 1]--;
+        counts[tileIdx + 2]--;
+        dfs(tileIdx, melds + 1, partials, pairs);
+        counts[tileIdx]++;
+        counts[tileIdx + 1]++;
+        counts[tileIdx + 2]++;
+      }
+    }
+
+    // 5. 搭子
+    if (isMian) {
+      // 5a. 兩面 / 邊張 (e.g. 12, 78)
+      if (tileIdx % 9 < 8 && counts[tileIdx] >= 1 && counts[tileIdx + 1] >= 1) {
+        counts[tileIdx]--;
+        counts[tileIdx + 1]--;
+        dfs(tileIdx, melds, partials + 1, pairs);
+        counts[tileIdx]++;
+        counts[tileIdx + 1]++;
+      }
+      // 5b. 嵌張 (e.g. 13, 68)
+      if (tileIdx % 9 < 7 && counts[tileIdx] >= 1 && counts[tileIdx + 2] >= 1) {
+        counts[tileIdx]--;
+        counts[tileIdx + 2]--;
+        dfs(tileIdx, melds, partials + 1, pairs);
+        counts[tileIdx]++;
+        counts[tileIdx + 2]++;
+      }
+    }
+
+    // 6. 單張跳過
+    counts[tileIdx]--;
+    dfs(tileIdx, melds, partials, pairs);
+    counts[tileIdx]++;
+  }
+
+  dfs(0, 0, 0, 0);
+  return minShanten;
+}
+
+// 取得聽牌清單
+function getMjWaitingTiles(counts) {
+  const waits = [];
+  for (let i = 0; i < 34; i++) {
+    if (counts[i] < 4) {
+      counts[i]++;
+      const shanten = calculateMjShanten(counts);
+      if (shanten === -1) {
+        waits.push(i);
+      }
+      counts[i]--;
+    }
+  }
+  return waits;
+}
+
+// 取得有效進張牌
+function getMjEffectiveDraws(counts) {
+  const currentShanten = calculateMjShanten(counts);
+  if (currentShanten === -1) return [];
+  
+  const draws = [];
+  for (let i = 0; i < 34; i++) {
+    if (counts[i] < 4) {
+      counts[i]++;
+      const shanten = calculateMjShanten(counts);
+      if (shanten < currentShanten) {
+        draws.push(i);
+      }
+      counts[i]--;
+    }
+  }
+  return draws;
+}
+
+// 解析中文麻將牌名稱
+function parseTile(str) {
+  if (!str) return -1;
+  str = str.replace(/風|板/g, '').trim();
+  if (str === '東') return 27;
+  if (str === '南') return 28;
+  if (str === '西') return 29;
+  if (str === '北') return 30;
+  if (str === '紅中' || str === '中') return 31;
+  if (str === '青發' || str === '發' || str === '綠發') return 32;
+  if (str === '白板' || str === '白') return 33;
+  
+  const mapNum = { '一':1, '二':2, '三':3, '四':4, '五':5, '六':6, '七':7, '八':8, '九':9, '1':1, '2':2, '3':3, '4':4, '5':5, '6':6, '7':7, '8':8, '9':9 };
+  const numChar = str[0];
+  const typeChar = str[1];
+  const num = mapNum[numChar] || parseInt(numChar);
+  if (!num || num < 1 || num > 9) return -1;
+  
+  if (typeChar === '萬' || typeChar === 'w' || typeChar === 'W') return num - 1;
+  if (typeChar === '筒' || typeChar === 't' || typeChar === 'T' || typeChar === '餅' || typeChar === 'p' || typeChar === 'P') return 8 + num;
+  if (typeChar === '條' || typeChar === 's' || typeChar === 'S' || typeChar === '索') return 17 + num;
+  
+  return -1;
+}
+
+// 實時麻將手牌智能分析
+function analyzeMjHand() {
+  const tiles = state.mj.tiles;
+  const count = tiles.length;
+  
+  const resultPanel = document.getElementById('mj-analysis-result-panel');
+  const statusBanner = document.getElementById('mj-status-banner');
+  const detailsEl = document.getElementById('mj-analysis-details');
+  
+  if (!resultPanel || !statusBanner || !detailsEl) return;
+  
+  if (count === 0) {
+    resultPanel.style.display = 'none';
+    return;
+  }
+  
+  resultPanel.style.display = 'block';
+  
+  const counts = new Array(34).fill(0);
+  tiles.forEach(t => counts[t]++);
+  
+  for (let i = 0; i < 34; i++) {
+    if (counts[i] > 4) {
+      statusBanner.className = 'mj-status-banner shanten-other';
+      statusBanner.innerHTML = `⚠️ 錯誤：【${MJ_TILE_NAMES[i]}】超過了 4 張！請檢查手牌！`;
+      detailsEl.innerHTML = '';
+      return;
+    }
+  }
+
+  const is16Style = (16 - count) % 3 === 0 && count >= 1 && count <= 16;
+  const is17Style = (17 - count) % 3 === 0 && count >= 2 && count <= 17;
+
+  if (is16Style) {
+    const shanten = calculateMjShanten(counts);
+    const exposedMelds = (16 - count) / 3;
+    
+    if (shanten === 0) {
+      const waits = getMjWaitingTiles(counts);
+      let waitsHtml = '';
+      if (waits.length === 0) {
+        waitsHtml = `<span style="color: var(--accent-danger);">無聽牌 (相公或無解)</span>`;
+      } else {
+        waitsHtml = waits.map(w => {
+          const info = getMjTileInfo(w);
+          const inHand = counts[w];
+          const remaining = 4 - inHand;
+          return `<span class="card-badge" style="background: white; color: #111; border-radius: 4px; padding: 4px 8px; font-weight: 700; display: inline-flex; align-items: center; border: 1px solid #ccc;">
+                    <span class="${info.cls}">${info.text}</span> <small style="color: var(--text-muted); font-size: 0.75rem; margin-left: 4px;">(剩 ${remaining} 張)</small>
+                  </span>`;
+        }).join(' ');
+      }
+      
+      statusBanner.className = 'mj-status-banner tenpai';
+      statusBanner.innerHTML = `🎉 恭喜！目前立牌已進入【聽牌】狀態！ (已吃碰 ${exposedMelds} 副牌)`;
+      
+      detailsEl.innerHTML = `
+        <div style="margin-top: 10px;">
+          <p style="font-size: 1.05rem; margin-bottom: 10px;">🎯 <b>目前聽的牌：</b></p>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px;">
+            ${waitsHtml}
+          </div>
+          <p class="api-help-tip">💡 提示：以上剩餘張數是扣除你自己手牌後的張數（最多4張）。</p>
+        </div>
+      `;
+    } else {
+      const shantenText = shanten === 1 ? '一向聽 (差 1 張牌聽牌)' : `${shanten} 向聽 (差 ${shanten} 張牌聽牌)`;
+      statusBanner.className = shanten === 1 ? 'mj-status-banner shanten-1' : 'mj-status-banner shanten-other';
+      statusBanner.innerHTML = `⏳ 目前立牌為【${shantenText}】 (已吃碰 ${exposedMelds} 副牌)`;
+      
+      const effective = getMjEffectiveDraws(counts);
+      let effHtml = '';
+      if (effective.length === 0) {
+        effHtml = `<p style="color: var(--text-muted);">無有效進張牌</p>`;
+      } else {
+        let totalRemaining = 0;
+        const items = effective.map(w => {
+          const info = getMjTileInfo(w);
+          const remaining = 4 - counts[w];
+          totalRemaining += remaining;
+          return `<span class="card-badge" style="background: white; color: #111; border-radius: 4px; padding: 4px 8px; font-weight: 700; display: inline-flex; align-items: center; border: 1px solid #ccc;">
+                    <span class="${info.cls}">${info.text}</span> <small style="color: var(--text-muted); font-size: 0.75rem; margin-left: 4px;">(剩 ${remaining} 張)</small>
+                  </span>`;
+        }).join(' ');
+        
+        effHtml = `
+          <div style="margin-top: 10px;">
+            <p style="font-size: 1rem; margin-bottom: 8px;">💡 <b>摸入以下任何一張牌即可前進向聽數 (共 ${totalRemaining} 張)：</b></p>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+              ${items}
+            </div>
+          </div>
+        `;
+      }
+      
+      detailsEl.innerHTML = effHtml;
+    }
+  } 
+  else if (is17Style) {
+    const exposedMelds = (17 - count) / 3;
+    statusBanner.className = 'mj-status-banner shanten-other';
+    statusBanner.innerHTML = `🤔 立牌有 ${count} 張 (已吃碰 ${exposedMelds} 副牌)，打哪張最有利？以下為智慧推薦捨牌：`;
+    
+    const uniqueTiles = [...new Set(tiles)].sort((a,b)=>a-b);
+    const analysisResults = [];
+    
+    uniqueTiles.forEach(discard => {
+      counts[discard]--;
+      const newShanten = calculateMjShanten(counts);
+      
+      let waitOrDraws = [];
+      let totalRemaining = 0;
+      
+      if (newShanten === 0) {
+        waitOrDraws = getMjWaitingTiles(counts);
+        waitOrDraws.forEach(w => totalRemaining += (4 - counts[w]));
+      } else {
+        waitOrDraws = getMjEffectiveDraws(counts);
+        waitOrDraws.forEach(w => totalRemaining += (4 - counts[w]));
+      }
+      
+      analysisResults.push({
+        discard,
+        shanten: newShanten,
+        elements: waitOrDraws,
+        totalRemaining
+      });
+      
+      counts[discard]++;
+    });
+    
+    analysisResults.sort((a, b) => {
+      if (a.shanten !== b.shanten) return a.shanten - b.shanten;
+      return b.totalRemaining - a.totalRemaining;
+    });
+    
+    let rowsHtml = '';
+    analysisResults.forEach((res, index) => {
+      const discInfo = getMjTileInfo(res.discard);
+      const isOptimal = (index === 0);
+      
+      let resText = '';
+      if (res.shanten === 0) {
+        resText = `<span style="color: var(--accent-mint); font-weight: 700;">聽牌！</span>`;
+      } else {
+        resText = `<span>${res.shanten}向聽</span>`;
+      }
+      
+      const elementsText = res.elements.map(w => getMjTileInfo(w).text).join(', ') || '無';
+      
+      rowsHtml += `
+        <tr>
+          <td class="${isOptimal ? 'optimal' : 'suboptimal'}" style="display: flex; align-items: center; gap: 8px;">
+            <span class="mj-tile" style="width:30px; height:40px; font-size:0.8rem; box-shadow: 0 2px 0 #1b4d3e, 0 3px 4px rgba(0,0,0,0.5); margin-bottom:0; pointer-events:none;">
+              <span class="${discInfo.cls}">${discInfo.text}</span>
+            </span>
+            ${isOptimal ? ' 👑 最佳捨牌' : ''}
+          </td>
+          <td>${resText}</td>
+          <td style="font-size:0.85rem; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${elementsText}">
+            ${res.shanten === 0 ? '🎯 聽' : '摸'} <b>${elementsText}</b>
+          </td>
+          <td><span style="color: var(--accent-gold); font-weight:700;">${res.totalRemaining}</span> 張</td>
+        </tr>
+      `;
+    });
+    
+    detailsEl.innerHTML = `
+      <div class="table-responsive" style="margin-top: 10px;">
+        <table class="mj-analysis-table">
+          <thead>
+            <tr>
+              <th>捨棄手牌</th>
+              <th>丟棄後狀態</th>
+              <th>聽牌/進張</th>
+              <th>有效剩餘</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+      </div>
+    `;
+  } 
+  else {
+    statusBanner.className = 'mj-status-banner shanten-other';
+    statusBanner.innerHTML = `⚠️ 目前立牌為 ${count} 張，不符合台灣麻將立牌張數條件。`;
+    detailsEl.innerHTML = `
+      <div style="font-size:0.92rem; color:var(--text-secondary); line-height:1.6; padding:10px 15px;">
+        <p>💡 <b>手動輸入立牌規則：</b></p>
+        <ul style="margin-left: 20px; margin-top: 5px;">
+          <li><b>聽牌分析 (聽什麼牌)</b>：立牌數應為 <b>16 - 3×K</b> 張 (如：<b>16, 13, 10, 7, 4, 1</b> 張)，代表您已吃碰了 K 副牌。</li>
+          <li><b>捨牌分析 (打哪張最優)</b>：立牌數應為 <b>17 - 3×K</b> 張 (如：<b>17, 14, 11, 8, 5, 2</b> 張)，代表您剛摸了牌。</li>
+        </ul>
+        <p style="margin-top: 10px; color: var(--text-muted);">※ 請在右側鍵盤加減手牌，調整至上述張數後，系統將自動啟動高精確度聽牌/捨牌推薦！</p>
+      </div>
+    `;
+  }
+}
+
+// 初始化虛擬鍵盤
+function initMjKeyboard() {
+  const wanRow = document.getElementById('mj-kb-wan');
+  const tongRow = document.getElementById('mj-kb-tong');
+  const suoRow = document.getElementById('mj-kb-suo');
+  const ziRow = document.getElementById('mj-kb-zi');
+  
+  if (!wanRow || !tongRow || !suoRow || !ziRow) return;
+  
+  wanRow.innerHTML = '';
+  tongRow.innerHTML = '';
+  suoRow.innerHTML = '';
+  ziRow.innerHTML = '';
+  
+  // 萬子 (0~8)
+  for (let i = 0; i < 9; i++) {
+    const info = getMjTileInfo(i);
+    const btn = document.createElement('button');
+    btn.className = 'btn-mj-tile';
+    btn.innerHTML = `<span class="${info.cls}">${info.text}</span>`;
+    btn.onclick = () => addMjTile(i);
+    wanRow.appendChild(btn);
+  }
+  
+  // 筒子 (9~17)
+  for (let i = 9; i < 18; i++) {
+    const info = getMjTileInfo(i);
+    const btn = document.createElement('button');
+    btn.className = 'btn-mj-tile';
+    btn.innerHTML = `<span class="${info.cls}">${info.text}</span>`;
+    btn.onclick = () => addMjTile(i);
+    tongRow.appendChild(btn);
+  }
+  
+  // 條子 (18~26)
+  for (let i = 18; i < 27; i++) {
+    const info = getMjTileInfo(i);
+    const btn = document.createElement('button');
+    btn.className = 'btn-mj-tile';
+    btn.innerHTML = `<span class="${info.cls}">${info.text}</span>`;
+    btn.onclick = () => addMjTile(i);
+    suoRow.appendChild(btn);
+  }
+  
+  // 字牌 (27~33)
+  for (let i = 27; i < 34; i++) {
+    const info = getMjTileInfo(i);
+    const btn = document.createElement('button');
+    btn.className = 'btn-mj-tile';
+    if (i === 33) {
+      btn.innerHTML = `<span class="mj-zi mj-bai"></span>`;
+    } else {
+      btn.innerHTML = `<span class="${info.cls}">${info.text}</span>`;
+    }
+    btn.onclick = () => addMjTile(i);
+    ziRow.appendChild(btn);
+  }
+  
+  renderMjHand();
+}
+
+// 手動加牌
+function addMjTile(tileIdx) {
+  if (state.mj.tiles.length >= 17) {
+    showCustomAlert('⚠️ 手牌已滿', '手牌上限為 17 張（摸牌分析）！請先丟棄一些牌再點選。');
+    return;
+  }
+  
+  state.mj.tiles.push(tileIdx);
+  state.mj.tiles.sort((a,b)=>a-b);
+  
+  renderMjHand();
+  analyzeMjHand();
+  saveToLocalStorage();
+}
+
+// 刪除手牌
+function removeMjTileAtIndex(index) {
+  state.mj.tiles.splice(index, 1);
+  renderMjHand();
+  analyzeMjHand();
+  saveToLocalStorage();
+}
+
+// 清空手牌
+function clearMjTiles() {
+  state.mj.tiles = [];
+  renderMjHand();
+  analyzeMjHand();
+  saveToLocalStorage();
+}
+
+// 渲染手牌
+function renderMjHand() {
+  const display = document.getElementById('mj-inventory-display');
+  const countEl = document.getElementById('mj-tiles-count');
+  
+  if (!display || !countEl) return;
+  
+  const tiles = state.mj.tiles;
+  countEl.textContent = tiles.length;
+  
+  if (tiles.length === 0) {
+    display.innerHTML = `<span class="empty-tip">📸 請拍照或上傳手牌照片，或直接在右側點選鍵盤手動輸入</span>`;
+    return;
+  }
+  
+  display.innerHTML = '';
+  tiles.forEach((tileVal, index) => {
+    const info = getMjTileInfo(tileVal);
+    const badge = document.createElement('span');
+    badge.className = 'mj-tile';
+    badge.title = '點擊移除此牌';
+    
+    if (tileVal === 33) {
+      badge.innerHTML = `<span class="mj-zi mj-bai"></span>`;
+    } else {
+      badge.innerHTML = `<span class="${info.cls}">${info.text}</span>`;
+    }
+    
+    badge.onclick = () => removeMjTileAtIndex(index);
+    display.appendChild(badge);
+  });
+}
+
+// 觸發相機拍照 / 檔案上傳
+function triggerMjPhotoCapture() {
+  const input = document.getElementById('mj-photo-input');
+  if (input) {
+    input.click();
+  }
+}
+
+// 處理相機拍照或檔案上傳，轉成 Base64
+function handleMjPhotoUpload(file) {
+  if (!file) return;
+  
+  startMjScanningAnimation();
+  
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const base64Data = e.target.result.split(',')[1];
+    const mimeType = file.type;
+    
+    callGeminiMjVisionAPI(base64Data, mimeType);
+  };
+  reader.onerror = function() {
+    alert('❌ 讀取圖片檔案失敗，請再試一次。');
+    stopMjScanningAnimation();
+  };
+  reader.readAsDataURL(file);
+}
+
+function startMjScanningAnimation() {
+  const container = document.getElementById('mj-scan-container');
+  const btn = document.getElementById('mj-scan-btn');
+  
+  if (container) container.classList.add('scanning');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '🤖 AI 正在掃描分析麻將牌面...';
+  }
+}
+
+function stopMjScanningAnimation() {
+  const container = document.getElementById('mj-scan-container');
+  const btn = document.getElementById('mj-scan-btn');
+  const input = document.getElementById('mj-photo-input');
+  
+  if (container) container.classList.remove('scanning');
+  if (btn) {
+    btn.disabled = false;
+    btn.innerHTML = '📸 拍照 / 上傳辨識麻將手牌';
+  }
+  if (input) {
+    input.value = '';
+  }
+}
+
+// 🤖 呼叫 Gemini Vision API 辨識麻將牌面 (支援自動容錯切換)
+async function callGeminiMjVisionAPI(base64Data, mimeType) {
+  const apiKey = localStorage.getItem('gemini_api_key') || '';
+  if (!apiKey) {
+    alert('🔑 請先在上方「⚙️ 牌局全域設定」的進階設定中輸入您的 Gemini API Key！\n\n您可以點擊旁邊的連結免費申請一個，立等可取。');
+    stopMjScanningAnimation();
+    return;
+  }
+
+  const endpoints = [
+    {
+      url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
+      desc: "Gemini 3.5 Flash"
+    },
+    {
+      url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      desc: "Gemini 2.5 Flash"
+    },
+    {
+      url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      desc: "Gemini 2.0 Flash"
+    },
+    {
+      url: `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      desc: "Gemini 2.5 Flash (v1)"
+    }
+  ];
+
+  const prompt = `Identify every Mahjong tile visible in this image. 
+CRITICAL RULE: The image contains two rows of Mahjong tiles:
+1. A foreground row of standing tiles facing the camera directly (which represents the player's active hand).
+2. A background row of flat-lying tiles behind them (which represent exposed melds or flowers).
+You MUST ONLY identify the standing tiles in the foreground row that face the camera directly. Completely ignore the background row of flat-lying tiles or flowers.
+Read the character, wind, dragon, circle, or bamboo count of each tile in the standing foreground row. Return a JSON array of strings containing the Standard Chinese names of the tiles. Valid names: 一萬,二萬,三萬,四萬,五萬,六萬,七萬,八萬,九萬,一筒,二筒,三筒,四筒,五筒,六筒,七筒,八筒,九筒,一條,二條,三條,四條,五條,六條,七條,八條,九條,東風,南風,西風,北風,紅中,青發,白板. If no standing tiles are found, return []. Do not explain.`;
+
+  const requestBody = {
+    contents: [
+      {
+        parts: [
+          { text: prompt },
+          {
+            inlineData: {
+              mimeType: mimeType,
+              data: base64Data
+            }
+          }
+        ]
+      }
+    ],
+    generationConfig: {
+      responseMimeType: "application/json",
+      thinkingConfig: { thinkingBudget: 0 }
+    }
+  };
+
+  let lastError = null;
+  let success = false;
+
+  for (let i = 0; i < endpoints.length; i++) {
+    const endpoint = endpoints[i];
+    try {
+      console.log(`Trying Mahjong API endpoint [${i + 1}/${endpoints.length}]: ${endpoint.desc}`);
+      const response = await fetch(endpoint.url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        let errMsg = `HTTP ${response.status}`;
+        try {
+          const errText = await response.text();
+          const errJson = JSON.parse(errText);
+          errMsg = errJson.error?.message || errMsg;
+        } catch (e) {}
+        throw new Error(errMsg);
+      }
+
+      const result = await response.json();
+      const textResponse = result.candidates?.[0]?.content?.parts?.[0]?.text;
+      
+      if (!textResponse) {
+        throw new Error('未收到 AI 影像分析結果');
+      }
+
+      console.log(`Success using endpoint: ${endpoint.desc}`);
+      console.log('Gemini Mahjong AI Response:', textResponse);
+      
+      let cleanText = textResponse.trim();
+      if (cleanText.includes('```')) {
+        cleanText = cleanText.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+      }
+      
+      const startIdx = cleanText.indexOf('[');
+      const endIdx = cleanText.lastIndexOf(']');
+      if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+        cleanText = cleanText.substring(startIdx, endIdx + 1);
+      }
+
+      const tileList = JSON.parse(cleanText);
+      
+      if (Array.isArray(tileList)) {
+        const mappedTiles = tileList.map(name => parseTile(name)).filter(val => val !== -1);
+        
+        if (mappedTiles.length === 0) {
+          alert('🤖 AI 掃描已完成，但未能看清任何麻將牌面。請攤開手牌並確保無重疊後，重新拍照！');
+        } else {
+          state.mj.tiles = mappedTiles.sort((a,b)=>a-b);
+          renderMjHand();
+          analyzeMjHand();
+          saveToLocalStorage();
+          
+          showCustomAlert('🎉 辨識成功', `🤖 成功辨識！已為您自動錄入 ${mappedTiles.length} 張麻將手牌！`);
+        }
+        success = true;
+        break;
+      } else {
+        throw new Error('回傳資料格式非陣列');
+      }
+    } catch (error) {
+      console.warn(`Mahjong Endpoint ${endpoint.desc} failed:`, error.message);
+      lastError = error;
+    }
+  }
+
+  if (!success) {
+    console.error('All Mahjong API endpoints failed:', lastError);
+    alert(`❌ 麻將辨識失敗：${lastError.message}\n\n請檢查 API Key 是否正確，或請將牌平鋪重新拍照！`);
+  }
+
+  stopMjScanningAnimation();
+}
+

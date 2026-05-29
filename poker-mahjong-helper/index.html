@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="index.css?v=3.5">
+  <link rel="stylesheet" href="index.css?v=4.0">
 </head>
 <body>
   <div class="app-container">
@@ -25,6 +25,7 @@
     <nav class="app-nav">
       <button class="nav-tab active" id="tab-btn-match" onclick="switchTab('match')">📅 約戰報名</button>
       <button class="nav-tab" id="tab-btn-calc" onclick="switchTab('calc')">🃏 記分結算</button>
+      <button class="nav-tab" id="tab-btn-mj" onclick="switchTab('mj')">🀄️ 聽牌分析</button>
     </nav>
 
     <!-- Main Content Area -->
@@ -502,6 +503,64 @@
         </div>
       </section>
 
+      <!-- Tab 3: 麻將聽牌 (Mahjong Helper) -->
+      <section id="tab-mj" class="tab-content">
+        <div class="card glass-panel">
+          <h2 class="card-title">🀄️ 麻將智能聽牌分析 (台灣 16 張)</h2>
+          
+          <div class="mj-layout-grid">
+            <!-- Left: Hand Display and Scanning -->
+            <div class="mj-left-panel">
+              <div class="card-inventory-section">
+                <div class="inventory-header">
+                  <span class="label-text">目前立牌明細 (<span id="mj-tiles-count" style="color: var(--accent-mint); font-weight: 700;">0</span> 張，吃碰明牌不計入)</span>
+                  <button class="btn-clear-cards" onclick="clearMjTiles()">重置手牌</button>
+                </div>
+                
+                <div class="scan-container" id="mj-scan-container" style="border: 1px solid rgba(229, 169, 59, 0.2); background: rgba(10, 20, 15, 0.6); padding: 15px; border-radius: 8px;">
+                  <div class="mj-inventory-display" id="mj-inventory-display" style="min-height: 100px;">
+                    <span class="empty-tip">⌨️ 目前立牌為空。請在右側點擊虛擬鍵盤，輸入您的立牌！</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 📊 智能分析結果報告 -->
+              <div class="mj-analysis-panel card glass-panel" id="mj-analysis-result-panel" style="display: none; border-color: var(--accent-gold);">
+                <h3 class="card-title text-gold" style="font-size: 1.15rem; margin-bottom: 12px; border-left: 3px solid var(--accent-gold); padding-left: 10px;">📊 雀神智能聽牌 analysis 報告</h3>
+                
+                <div class="mj-status-banner" id="mj-status-banner">
+                  <!-- e.g. "聽牌！" or "一向聽" -->
+                </div>
+
+                <div class="mj-analysis-details" id="mj-analysis-details">
+                  <!-- Discard suggestion table or wait description -->
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Virtual Keyboard -->
+            <div class="mj-right-panel card glass-panel" style="border-top: 4px solid var(--accent-gold); margin-bottom: 0;">
+              <h3 class="card-title" style="font-size: 1.1rem; margin-bottom: 12px; border-left: 3px solid var(--accent-gold); padding-left: 10px;">⌨️ 手動加牌虛擬鍵盤</h3>
+              <p class="api-help-tip" style="margin-bottom: 12px; font-size: 0.8rem;">💡 直接點擊下方麻將牌即可加入手牌，點擊上方手牌可直接刪除該牌。</p>
+              
+              <div class="mj-keyboard-section">
+                <div class="mj-keyboard-title" style="color: var(--accent-mint); font-size: 0.85rem; font-weight: 600; margin-bottom: 6px;">萬子 (Character)</div>
+                <div class="mj-keyboard-row" id="mj-kb-wan" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px;"></div>
+
+                <div class="mj-keyboard-title" style="color: var(--accent-mint); font-size: 0.85rem; font-weight: 600; margin-bottom: 6px;">筒子 (Circle)</div>
+                <div class="mj-keyboard-row" id="mj-kb-tong" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px;"></div>
+
+                <div class="mj-keyboard-title" style="color: var(--accent-mint); font-size: 0.85rem; font-weight: 600; margin-bottom: 6px;">條子 (Bamboo)</div>
+                <div class="mj-keyboard-row" id="mj-kb-suo" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px;"></div>
+
+                <div class="mj-keyboard-title" style="color: var(--accent-gold); font-size: 0.85rem; font-weight: 600; margin-bottom: 6px;">字牌 (Honors)</div>
+                <div class="mj-keyboard-row" id="mj-kb-zi" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
     </main>
 
     <!-- Footer -->
@@ -521,6 +580,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=4.0"></script>
+  <script src="app.js?v=5.0"></script>
 </body>
 </html>
